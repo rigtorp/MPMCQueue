@@ -6,6 +6,7 @@ set(CMAKE_CXX_FLAGS "-std=c++11 -Wall")
 
 link_libraries(pthread rt)
 
+add_executable(MPMCQueueExample MPMCQueueExample.cpp)
 add_executable(MPMCQueueTest MPMCQueueTest.cpp)
 
 enable_testing()
