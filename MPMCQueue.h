@@ -131,8 +131,10 @@ public:
   }
 
 private:
-  constexpr size_t idx(size_t i) noexcept { return i % capacity_ + kPadding; }
-  constexpr size_t turn(size_t i) noexcept { return i / capacity_; }
+  constexpr size_t idx(size_t i) const noexcept {
+    return i % capacity_ + kPadding;
+  }
+  constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
 
   static constexpr size_t kCacheLineSize = 128;
 
