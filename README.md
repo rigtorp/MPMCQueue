@@ -26,6 +26,34 @@ t1.join();
 t2.join();
 ```
 
+## Usage
+
+- `MPMCQueue<T>(size_t capacity);`
+
+  Constructs a new `MPMCQueue` holding items of type `T` with capacity
+  `capacity`.
+  
+- `void emplace(Args &&... args);`
+
+  Enqueue an item using inplace construction. Blocks if queue is full.
+  
+- `bool try_emplace(Args &&... args);`
+
+  Try to enqueue an item using inplace construction. Returns `true` on
+  success and `false` if queue is full.
+  
+- `void pop(T &v);`
+
+  Dequeue an item by copying or moving the item into `v`. Blocks if
+  queue is empty.
+  
+- `bool try_pop(T &v);`
+
+  Try to dequeue an item by copying or moving the item into
+  `v`. Return `true` on sucess and `false` if the queue is empty.
+
+All operations except construction and destruction are thread safe.
+
 ## Implementation
 
 ![Memory layout](https://github.com/rigtorp/MPMCQueue/blob/master/mpmc.png)
@@ -65,34 +93,6 @@ the implementation:
 ## Benchmarks
 
 TODO
-
-## Usage
-
-- `MPMCQueue<T>(size_t capacity);`
-
-  Constructs a new `MPMCQueue` holding items of type `T` with capacity
-  `capacity`.
-  
-- `void emplace(Args &&... args);`
-
-  Enqueue an item using inplace construction. Blocks if queue is full.
-  
-- `bool try_emplace(Args &&... args);`
-
-  Try to enqueue an item using inplace construction. Returns `true` on
-  success and `false` if queue is full.
-  
-- `void pop(T &v);`
-
-  Dequeue an item by copying or moving the item into `v`. Blocks if
-  queue is empty.
-  
-- `bool try_pop(T &v);`
-
-  Try to dequeue an item by copying or moving the item into
-  `v`. Return `true` on sucess and `false` if the queue is empty.
-
-All operations except construction and destruction are thread safe.
 
 ## About
 
