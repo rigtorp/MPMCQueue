@@ -33,12 +33,12 @@ struct TestType {
   static int refCount;
   static constexpr uint64_t kMagic = 0x38c8fb6f8207a508;
   uint64_t magic;
-  TestType() {
+  TestType() noexcept {
     refCount++;
     assert(magic != kMagic);
     magic = kMagic;
   };
-  TestType(const TestType &) {
+  TestType(const TestType &) noexcept {
     refCount++;
     assert(magic != kMagic);
     magic = kMagic;
