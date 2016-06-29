@@ -152,7 +152,7 @@ private:
 
     // Align to avoid false sharing between adjacent slots
     alignas(kCacheLineSize) std::atomic<size_t> turn = {0};
-    std::aligned_storage<sizeof(T), alignof(T)> storage;
+    typename std::aligned_storage<sizeof(T), alignof(T)>::type storage;
   };
 
   // Padding to avoid false sharing between slots_ and adjacent allocations
