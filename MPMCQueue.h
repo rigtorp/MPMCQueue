@@ -38,13 +38,16 @@ private:
   static_assert(std::is_nothrow_destructible<T>::value,
                 "T must be nothrow destructible");
 
-public:
-  explicit MPMCQueue(const size_t capacity)
-      : capacity_(capacity), slots_(new Slot[capacity + 2 * kPadding]),
-        head_(0), tail_(0) {
-    if (capacity_ < 1) {
+  static size_t capacityCheck(size_t capacity) {
+    if (capacity < 1) {
       throw std::invalid_argument("capacity < 1");
     }
+    return capacity;
+  }
+public:
+  explicit MPMCQueue(const size_t capacity)
+      : capacity_(capacityCheck(capacity)), slots_(new Slot[capacity + 2 * kPadding]),
+        head_(0), tail_(0) {
     if (!slots_) {
       throw std::bad_alloc();
     }
