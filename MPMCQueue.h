@@ -46,10 +46,6 @@ public:
     if (capacity_ < 1) {
       throw std::invalid_argument("capacity < 1");
     }
-    if (!slots_) {
-      throw std::bad_alloc();
-    }
-
     assert(alignof(MPMCQueue<T>) >= kCacheLineSize);
     assert(reinterpret_cast<char *>(&tail_) -
                reinterpret_cast<char *>(&head_) >=
