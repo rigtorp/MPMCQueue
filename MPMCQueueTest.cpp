@@ -97,6 +97,16 @@ int main(int argc, char *argv[]) {
     assert(q.try_pop(t) == false && t == 1);
   }
 
+  {
+    bool throws = false;
+    try {
+      MPMCQueue<int> q(0);
+    } catch (std::exception &e) {
+      throws = true;
+    }
+    assert(throws == true);
+  }
+
   // Fuzz test
   {
     const uint64_t numOps = 1000;
