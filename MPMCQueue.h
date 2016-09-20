@@ -40,7 +40,8 @@ private:
 
 public:
   explicit MPMCQueue(const size_t capacity)
-      : capacity_(capacity), slots_(new Slot[capacity + 2 * kPadding]),
+      : capacity_(capacity),
+        slots_(capacity > 0 ? new Slot[capacity + 2 * kPadding] : nullptr),
         head_(0), tail_(0) {
     if (capacity_ < 1) {
       throw std::invalid_argument("capacity < 1");
