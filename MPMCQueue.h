@@ -58,7 +58,7 @@ public:
   MPMCQueue(const MPMCQueue &) = delete;
   MPMCQueue &operator=(const MPMCQueue &) = delete;
 
-  template <typename... Args> void emplace(Args &&... args) {
+  template <typename... Args> void emplace(Args &&... args) noexcept {
     static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
                   "T must be nothrow constructible with Args&&...");
     auto const head = head_.fetch_add(1);
@@ -69,7 +69,7 @@ public:
     slot.turn.store(turn(head) * 2 + 1, std::memory_order_release);
   }
 
-  template <typename... Args> bool try_emplace(Args &&... args) {
+  template <typename... Args> bool try_emplace(Args &&... args) noexcept {
     static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
                   "T must be nothrow constructible with Args&&...");
     auto head = head_.load(std::memory_order_acquire);
@@ -91,7 +91,7 @@ public:
     }
   }
 
-  void push(const T &v) {
+  void push(const T &v) noexcept {
     static_assert(std::is_nothrow_copy_constructible<T>::value,
                   "T must be nothrow copy constructible");
     emplace(v);
@@ -100,11 +100,11 @@ public:
   template <typename P,
             typename = typename std::enable_if<
                 std::is_nothrow_constructible<T, P &&>::value>::type>
-  void push(P &&v) {
+  void push(P &&v) noexcept {
     emplace(std::forward<P>(v));
   }
 
-  bool try_push(const T &v) {
+  bool try_push(const T &v) noexcept {
     static_assert(std::is_nothrow_copy_constructible<T>::value,
                   "T must be nothrow copy constructible");
     return try_emplace(v);
@@ -113,11 +113,11 @@ public:
   template <typename P,
             typename = typename std::enable_if<
                 std::is_nothrow_constructible<T, P &&>::value>::type>
-  bool try_push(P &&v) {
+  bool try_push(P &&v) noexcept {
     return try_emplace(std::forward<P>(v));
   }
 
-  void pop(T &v) {
+  void pop(T &v) noexcept {
     auto const tail = tail_.fetch_add(1);
     auto &slot = slots_[idx(tail)];
     while (turn(tail) * 2 + 1 != slot.turn.load(std::memory_order_acquire))
@@ -127,7 +127,7 @@ public:
     slot.turn.store(turn(tail) * 2 + 2, std::memory_order_release);
   }
 
-  bool try_pop(T &v) {
+  bool try_pop(T &v) noexcept {
     auto tail = tail_.load(std::memory_order_acquire);
     for (;;) {
       auto &slot = slots_[idx(tail)];
@@ -164,9 +164,17 @@ private:
     }
 
     template <typename... Args> void construct(Args &&... args) noexcept {
+      static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
+                    "T must be nothrow constructible with Args&&...");
       new (&storage) T(std::forward<Args>(args)...);
     }
-    void destroy() noexcept { reinterpret_cast<T *>(&storage)->~T(); }
+
+    void destroy() noexcept {
+      static_assert(std::is_nothrow_destructible<T>::value,
+                    "T must be nothrow destructible");
+      reinterpret_cast<T *>(&storage)->~T();
+    }
+
     T &&move() noexcept { return reinterpret_cast<T &&>(storage); }
 
     // Align to avoid false sharing between adjacent slots
