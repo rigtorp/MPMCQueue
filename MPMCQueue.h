@@ -31,7 +31,7 @@ namespace rigtorp {
 
 template <typename T> class MPMCQueue {
 private:
-  static_assert(std::is_nothrow_copy_assignable<T>::value &&
+  static_assert(std::is_nothrow_copy_assignable<T>::value ||
                     std::is_nothrow_move_assignable<T>::value,
                 "T must be nothrow copy or move assignable");
 
@@ -59,8 +59,8 @@ public:
   MPMCQueue &operator=(const MPMCQueue &) = delete;
 
   template <typename... Args> void emplace(Args &&... args) {
-    static_assert(std::is_nothrow_constructible<T, Args...>::value,
-                  "T must be nothrow constructible");
+    static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
+                  "T must be nothrow constructible with Args&&...");
     auto const head = head_.fetch_add(1);
     auto &slot = slots_[idx(head)];
     while (turn(head) * 2 != slot.turn.load(std::memory_order_acquire))
@@ -70,8 +70,8 @@ public:
   }
 
   template <typename... Args> bool try_emplace(Args &&... args) {
-    static_assert(std::is_nothrow_constructible<T, Args...>::value,
-                  "T must be nothrow constructible");
+    static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
+                  "T must be nothrow constructible with Args&&...");
     auto head = head_.load(std::memory_order_acquire);
     for (;;) {
       auto &slot = slots_[idx(head)];
@@ -91,9 +91,31 @@ public:
     }
   }
 
-  void push(T &&v) { emplace(std::forward<T>(v)); }
+  void push(const T &v) {
+    static_assert(std::is_nothrow_copy_constructible<T>::value,
+                  "T must be nothrow copy constructible");
+    emplace(v);
+  }
 
-  bool try_push(T &&v) { return try_emplace(std::forward<T>(v)); }
+  template <typename P,
+            typename = typename std::enable_if<
+                std::is_nothrow_constructible<T, P &&>::value>::type>
+  void push(P &&v) {
+    emplace(std::forward<P>(v));
+  }
+
+  bool try_push(const T &v) {
+    static_assert(std::is_nothrow_copy_constructible<T>::value,
+                  "T must be nothrow copy constructible");
+    return try_emplace(v);
+  }
+
+  template <typename P,
+            typename = typename std::enable_if<
+                std::is_nothrow_constructible<T, P &&>::value>::type>
+  bool try_push(P &&v) {
+    return try_emplace(std::forward<P>(v));
+  }
 
   void pop(T &v) {
     auto const tail = tail_.fetch_add(1);

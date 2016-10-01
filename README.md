@@ -41,7 +41,29 @@ t2.join();
 
   Try to enqueue an item using inplace construction. Returns `true` on
   success and `false` if queue is full.
-  
+
+- `bool push(const T &v);`
+
+  Enqueue an item using copy construction. Blocks if queue is full.
+
+- `template <typename P> bool push(P &&v);`
+
+  Enqueue an item using move construction. Participates in overload
+  resolution only if `std::is_nothrow_constructible<T, P&&>::value ==
+  true`. Blocks if queue is full.
+
+- `bool try_push(const T &v);`
+
+  Try to enqueue an item using copy construction. Returns `true` on
+  success and `false` if queue is full.
+
+- `template <typename P> bool try_push(P &&v);`
+
+  Try to enqueue an item using move construction. Participates in
+  overload resolution only if `std::is_nothrow_constructible<T,
+  P&&>::value == true`. Returns `true` on success and `false` if queue
+  is full.
+
 - `void pop(T &v);`
 
   Dequeue an item by copying or moving the item into `v`. Blocks if

@@ -97,6 +97,42 @@ int main(int argc, char *argv[]) {
     assert(q.try_pop(t) == false && t == 1);
   }
 
+  // Copyable only type
+  {
+    struct Test {
+      Test() {}
+      Test(const Test &) noexcept {}
+      Test &operator=(const Test &) noexcept { return *this; }
+      Test(Test &&) = delete;
+    };
+    MPMCQueue<Test> q(16);
+    // lvalue
+    Test v;
+    q.emplace(v);
+    q.try_emplace(v);
+    q.push(v);
+    q.try_push(v);
+    // xvalue
+    q.push(Test());
+    q.try_push(Test());
+  }
+
+  // Movable only type
+  {
+    MPMCQueue<std::unique_ptr<int>> q(16);
+    // lvalue
+    auto v = std::unique_ptr<int>(new int(1));
+    // q.emplace(v);
+    // q.try_emplace(v);
+    // q.push(v);
+    // q.try_push(v);
+    // xvalue
+    q.emplace(std::unique_ptr<int>(new int(1)));
+    q.try_emplace(std::unique_ptr<int>(new int(1)));
+    q.push(std::unique_ptr<int>(new int(1)));
+    q.try_push(std::unique_ptr<int>(new int(1)));
+  }
+
   {
     bool throws = false;
     try {
