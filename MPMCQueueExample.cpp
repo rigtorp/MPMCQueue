@@ -3,6 +3,8 @@
 #include <thread>
 
 int main(int argc, char *argv[]) {
+  (void)argc, (void)argv;
+
   using namespace rigtorp;
 
   MPMCQueue<int> q(10);

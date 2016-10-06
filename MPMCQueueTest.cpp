@@ -24,50 +24,47 @@ SOFTWARE.
 #include <cassert>
 #include <chrono>
 #include <iostream>
+#include <set>
 #include <thread>
 #include <vector>
 
-// TestType has a global reference count and detects incorrect use of placement
-// new
+// TestType tracks correct usage of constructors and destructors
 struct TestType {
-  static int refCount;
-  static constexpr uint64_t kMagic = 0x38c8fb6f8207a508;
-  uint64_t magic;
+  static std::set<const TestType *> constructed;
   TestType() noexcept {
-    refCount++;
-    assert(magic != kMagic);
-    magic = kMagic;
+    assert(constructed.count(this) == 0);
+    constructed.insert(this);
   };
-  TestType(const TestType &) noexcept {
-    refCount++;
-    assert(magic != kMagic);
-    magic = kMagic;
+  TestType(const TestType &other) noexcept {
+    assert(constructed.count(this) == 0);
+    assert(constructed.count(&other) == 1);
+    constructed.insert(this);
   };
-  TestType(TestType &&) noexcept {
-    refCount++;
-    assert(magic != kMagic);
-    magic = kMagic;
+  TestType(TestType &&other) noexcept {
+    assert(constructed.count(this) == 0);
+    assert(constructed.count(&other) == 1);
+    constructed.insert(this);
   };
   TestType &operator=(const TestType &other) noexcept {
-    assert(magic == kMagic);
-    assert(other.magic == kMagic);
+    assert(constructed.count(this) == 1);
+    assert(constructed.count(&other) == 1);
     return *this;
   };
   TestType &operator=(TestType &&other) noexcept {
-    assert(magic == kMagic);
-    assert(other.magic == kMagic);
+    assert(constructed.count(this) == 1);
+    assert(constructed.count(&other) == 1);
     return *this;
   }
   ~TestType() noexcept {
-    refCount--;
-    assert(magic == kMagic);
-    magic = 0;
+    assert(constructed.count(this) == 1);
+    constructed.erase(this);
   };
 };
 
-int TestType::refCount = 0;
+std::set<const TestType *> TestType::constructed;
 
 int main(int argc, char *argv[]) {
+  (void)argc, (void)argv;
 
   using namespace rigtorp;
 
@@ -76,17 +73,17 @@ int main(int argc, char *argv[]) {
     for (int i = 0; i < 10; i++) {
       q.emplace();
     }
-    assert(TestType::refCount == 10);
+    assert(TestType::constructed.size() == 10);
 
     TestType t;
     q.pop(t);
-    assert(TestType::refCount == 10);
+    assert(TestType::constructed.size() == 10);
 
     q.pop(t);
     q.emplace();
-    assert(TestType::refCount == 10);
+    assert(TestType::constructed.size() == 10);
   }
-  assert(TestType::refCount == 0);
+  assert(TestType::constructed.size() == 0);
 
   {
     MPMCQueue<int> q(1);
