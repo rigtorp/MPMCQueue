@@ -59,6 +59,8 @@ struct TestType {
     assert(constructed.count(this) == 1);
     constructed.erase(this);
   };
+  // To verify that alignment and padding calculations are handled correctly
+  char data[129];
 };
 
 std::set<const TestType *> TestType::constructed;

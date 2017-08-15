@@ -24,6 +24,7 @@ SOFTWARE.
 
 #include <atomic>
 #include <cassert>
+#include <cstdlib>
 #include <limits>
 #include <stdexcept>
 
@@ -41,18 +42,40 @@ private:
 public:
   explicit MPMCQueue(const size_t capacity)
       : capacity_(capacity),
-        slots_(capacity > 0 ? new Slot[capacity + 2 * kPadding] : nullptr),
+        slots_(capacity_ > 0 ? reinterpret_cast<Slot *>(aligned_alloc(
+                                   kCacheLineSize, capacity * sizeof(Slot)))
+                             : nullptr),
         head_(0), tail_(0) {
     if (capacity_ < 1) {
       throw std::invalid_argument("capacity < 1");
     }
-    assert(alignof(MPMCQueue<T>) >= kCacheLineSize);
+    if (slots_ == nullptr) {
+      throw std::bad_alloc();
+    }
+    for (size_t i = 0; i < capacity_; ++i) {
+      new (&slots_[i]) Slot();
+    }
+    static_assert(sizeof(MPMCQueue<T>) % kCacheLineSize == 0,
+                  "MPMCQueue<T> size must be a multiple of cache line size to "
+                  "prevent false sharing between adjacent queues");
+    static_assert(sizeof(Slot) % kCacheLineSize == 0,
+                  "Slot size must be a multiple of cache line size to prevent "
+                  "false sharing between adjacent slots");
+    assert(reinterpret_cast<size_t>(slots_) % kCacheLineSize == 0 &&
+           "slots_ array must be aligned to cache line size to prevent false "
+           "sharing between adjacent slots");
     assert(reinterpret_cast<char *>(&tail_) -
-               reinterpret_cast<char *>(&head_) >=
-           kCacheLineSize);
+                   reinterpret_cast<char *>(&head_) >=
+               kCacheLineSize &&
+           "head and tail must be a cache line apart to prevent false sharing");
   }
 
-  ~MPMCQueue() { delete[] slots_; }
+  ~MPMCQueue() noexcept {
+    for (size_t i = 0; i < capacity_; ++i) {
+      slots_[i].~Slot();
+    }
+    free(slots_);
+  }
 
   // non-copyable and non-movable
   MPMCQueue(const MPMCQueue &) = delete;
@@ -149,9 +172,8 @@ public:
   }
 
 private:
-  constexpr size_t idx(size_t i) const noexcept {
-    return i % capacity_ + kPadding;
-  }
+  constexpr size_t idx(size_t i) const noexcept { return i % capacity_; }
+
   constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
 
   static constexpr size_t kCacheLineSize = 128;
@@ -182,9 +204,6 @@ private:
     typename std::aligned_storage<sizeof(T), alignof(T)>::type storage;
   };
 
-  // Padding to avoid false sharing between slots_ and adjacent allocations
-  static constexpr size_t kPadding = (kCacheLineSize - 1) / sizeof(Slot) + 1;
-
 private:
   const size_t capacity_;
   Slot *const slots_;
@@ -192,8 +211,5 @@ private:
   // Align to avoid false sharing between head_ and tail_
   alignas(kCacheLineSize) std::atomic<size_t> head_;
   alignas(kCacheLineSize) std::atomic<size_t> tail_;
-
-  // Padding to avoid adjacent allocations to share cache line with tail_
-  char padding_[kCacheLineSize - sizeof(decltype(tail_))];
 };
 }
