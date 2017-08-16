@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Erik Rigtorp <erik@rigtorp.se>
+Copyright (c) 2017 Erik Rigtorp <erik@rigtorp.se>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,8 +24,8 @@ SOFTWARE.
 
 #include <atomic>
 #include <cassert>
-#include <cstdlib>
 #include <limits>
+#include <memory>
 #include <stdexcept>
 
 namespace rigtorp {
@@ -41,15 +41,20 @@ private:
 
 public:
   explicit MPMCQueue(const size_t capacity)
-      : capacity_(capacity),
-        slots_(capacity_ > 0 ? reinterpret_cast<Slot *>(aligned_alloc(
-                                   kCacheLineSize, capacity * sizeof(Slot)))
-                             : nullptr),
-        head_(0), tail_(0) {
+      : capacity_(capacity), head_(0), tail_(0) {
     if (capacity_ < 1) {
       throw std::invalid_argument("capacity < 1");
     }
+    size_t space = capacity * sizeof(Slot) + kCacheLineSize - 1;
+    buf_ = malloc(space);
+    if (buf_ == nullptr) {
+      throw std::bad_alloc();
+    }
+    void *buf = buf_;
+    slots_ = reinterpret_cast<Slot *>(
+        std::align(kCacheLineSize, capacity * sizeof(Slot), buf, space));
     if (slots_ == nullptr) {
+      free(buf_);
       throw std::bad_alloc();
     }
     for (size_t i = 0; i < capacity_; ++i) {
@@ -74,7 +79,7 @@ public:
     for (size_t i = 0; i < capacity_; ++i) {
       slots_[i].~Slot();
     }
-    free(slots_);
+    free(buf_);
   }
 
   // non-copyable and non-movable
@@ -206,7 +211,8 @@ private:
 
 private:
   const size_t capacity_;
-  Slot *const slots_;
+  Slot *slots_;
+  void *buf_;
 
   // Align to avoid false sharing between head_ and tail_
   alignas(kCacheLineSize) std::atomic<size_t> head_;
