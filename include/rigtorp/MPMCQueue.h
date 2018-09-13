@@ -71,7 +71,7 @@ public:
            "sharing between adjacent slots");
     assert(reinterpret_cast<char *>(&tail_) -
                    reinterpret_cast<char *>(&head_) >=
-               kCacheLineSize &&
+               static_cast<ssize_t>(kCacheLineSize) &&
            "head and tail must be a cache line apart to prevent false sharing");
   }
 
@@ -218,4 +218,4 @@ private:
   alignas(kCacheLineSize) std::atomic<size_t> head_;
   alignas(kCacheLineSize) std::atomic<size_t> tail_;
 };
-}
+} // namespace rigtorp
