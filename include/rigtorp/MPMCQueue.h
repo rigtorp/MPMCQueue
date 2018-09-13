@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2017 Erik Rigtorp <erik@rigtorp.se>
+Copyright (c) 2018 Erik Rigtorp <erik@rigtorp.se>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -71,7 +71,7 @@ public:
            "sharing between adjacent slots");
     assert(reinterpret_cast<char *>(&tail_) -
                    reinterpret_cast<char *>(&head_) >=
-               kCacheLineSize &&
+               static_cast<ssize_t>(kCacheLineSize) &&
            "head and tail must be a cache line apart to prevent false sharing");
   }
 
@@ -218,4 +218,4 @@ private:
   alignas(kCacheLineSize) std::atomic<size_t> head_;
   alignas(kCacheLineSize) std::atomic<size_t> tail_;
 };
-}
+} // namespace rigtorp

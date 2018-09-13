@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2016 Erik Rigtorp <erik@rigtorp.se>
+Copyright (c) 2018 Erik Rigtorp <erik@rigtorp.se>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -20,10 +20,10 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-#include "MPMCQueue.h"
 #include <cassert>
 #include <chrono>
 #include <iostream>
+#include <rigtorp/MPMCQueue.h>
 #include <set>
 #include <thread>
 #include <vector>

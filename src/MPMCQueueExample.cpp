@@ -1,5 +1,5 @@
-#include "MPMCQueue.h"
 #include <iostream>
+#include <rigtorp/MPMCQueue.h>
 #include <thread>
 
 int main(int argc, char *argv[]) {
