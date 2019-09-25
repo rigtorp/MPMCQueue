@@ -18,6 +18,11 @@ It's battle hardened and used daily in production:
   Research](https://www.charlesworthresearch.com/) and [Marquette
   Partners](https://www.marquettepartners.com/).
 
+It's been cited by the following papers:
+- Peizhao Ou and Brian Demsky. 2018. Towards understanding the costs of avoiding
+  out-of-thin-air results. Proc. ACM Program. Lang. 2, OOPSLA, Article 136
+  (October 2018), 29 pages. DOI: https://doi.org/10.1145/3276506 
+
 ## Example
 
 ```cpp
