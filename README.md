@@ -6,6 +6,18 @@
 A bounded multi-producer multi-consumer lock-free queue written in
 C++11.
 
+It's battle hardened and used daily in production:
+- In the [Frostbite game engine](https://www.ea.com/frostbite) developed by
+  [Electronic Arts](https://www.ea.com/) for the following games:
+  - [Anthem (2019)](https://www.ea.com/games/anthem)
+  - [Battlefield V (2018)](https://www.ea.com/games/battlefield/battlefield-5)
+  - [FIFA 18 (2017)](https://www.easports.com/fifa/fifa-18-cristiano-ronaldo)
+  - [Madden NFL 18 (2017)](https://www.ea.com/games/madden-nfl/madden-nfl-18)
+  - [Need for Speed: Payback (2017)](https://www.ea.com/games/need-for-speed/need-for-speed-payback)
+- In the low latency trading infrastructure at [Charlesworth
+  Research](https://www.charlesworthresearch.com/) and [Marquette
+  Partners](https://www.marquettepartners.com/).
+
 ## Example
 
 ```cpp
@@ -116,10 +128,10 @@ the implementation:
 
 - [ ] Add allocator supports so that the queue could be used with huge pages and
   shared memory
-- [ ] Add benchmarks and compare to boost::lockfree::queue and others
+- [ ] Add benchmarks and compare to `boost::lockfree::queue` and others
 - [ ] Use C++20 concepts instead of `static_assert` if available
 
 ## About
 
-This project was created by [Erik Rigtorp](http://rigtorp.se)
+This project was created by [Erik Rigtorp](https://rigtorp.se)
 <[erik@rigtorp.se](mailto:erik@rigtorp.se)>.
