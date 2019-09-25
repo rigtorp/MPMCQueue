@@ -112,9 +112,12 @@ the implementation:
 - A multithreaded fuzz test that all elements are enqueued and
   dequeued correctly under heavy contention.
 
-## Benchmarks
+## TODO
 
-TODO
+- [ ] Add allocator supports so that the queue could be used with huge pages and
+  shared memory
+- [ ] Add benchmarks and compare to boost::lockfree::queue and others
+- [ ] Use C++20 concepts instead of `static_assert` if available
 
 ## About
 
