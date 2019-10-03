@@ -71,7 +71,7 @@ public:
            "sharing between adjacent slots");
     assert(reinterpret_cast<char *>(&tail_) -
                    reinterpret_cast<char *>(&head_) >=
-               static_cast<ssize_t>(kCacheLineSize) &&
+               static_cast<std::ptrdiff_t>(kCacheLineSize) &&
            "head and tail must be a cache line apart to prevent false sharing");
   }
 
