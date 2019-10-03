@@ -4,7 +4,10 @@ project(MPMCQueue CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS "true")
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-if (NOT MSVC)
+
+if (MSVC)
+    add_compile_options(/permissive- /W4)
+else()
 	add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
 
