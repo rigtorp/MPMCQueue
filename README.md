@@ -112,11 +112,12 @@ Dequeue:
 
 References:
 
-- *Dave Dice*. [PTLQueue : a scalable bounded-capacity MPMC queue](https://blogs.oracle.com/dave/entry/ptlqueue_a_scalable_bounded_capacity).
-- *Dmitry Vyukov*. [Bounded MPMC queue](http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue).
-- *Massimiliano Meneghin et al*. [Performance evaluation of inter-thread communication mechanisms on multicore/multithreaded architectures](http://researcher.watson.ibm.com/researcher/files/ie-pasetto_davide/PerfLocksQueues.pdf).
+- *Daniel Orozco, Elkin Garcia, Rishi Khan, Kelly Livingston, and Guang R. Gao*. 2012. Toward high-throughput algorithms on many-core architectures. ACM Trans. Archit. Code Optim. 8, 4, Article 49 (January 2012), 21 pages. DOI: https://doi.org/10.1145/2086696.2086728
+- *Dave Dice*. 2014. [PTLQueue : a scalable bounded-capacity MPMC queue](https://blogs.oracle.com/dave/entry/ptlqueue_a_scalable_bounded_capacity).
 - *Oleksandr Otenko*. [US 8607249 B2: System and method for efficient concurrent queue implementation](http://www.google.com/patents/US8607249).
-- *Paul E. McKenney*. [Memory Barriers: a Hardware View for Software Hackers](http://irl.cs.ucla.edu/~yingdi/web/paperreading/whymb.2010.06.07c.pdf).
+- *Massimiliano Meneghin, Davide Pasetto, Hubertus Franke*. 2012. [Performance evaluation of inter-thread communication mechanisms on multicore/multithreaded architectures](http://researcher.watson.ibm.com/researcher/files/ie-pasetto_davide/PerfLocksQueues.pdf). DOI: https://doi.org/10.1145/2287076.2287098
+- *Paul E. McKenney*. 2010. [Memory Barriers: a Hardware View for Software Hackers](http://irl.cs.ucla.edu/~yingdi/web/paperreading/whymb.2010.06.07c.pdf).
+- *Dmitry Vyukov*. 2014. [Bounded MPMC queue](http://www.1024cores.net/home/lock-free-algorithms/queues/bounded-mpmc-queue).
 
 ## Testing
 
@@ -135,6 +136,7 @@ the implementation:
   shared memory
 - [ ] Add benchmarks and compare to `boost::lockfree::queue` and others
 - [ ] Use C++20 concepts instead of `static_assert` if available
+- [ ] Use `std::hardware_destructive_interference_size` if available
 
 ## About
 
