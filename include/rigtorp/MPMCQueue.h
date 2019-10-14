@@ -26,6 +26,7 @@ SOFTWARE.
 #include <cassert>
 #include <limits>
 #include <memory>
+#include <new> // std::hardware_destructive_interference_size
 #include <stdexcept>
 
 namespace rigtorp {
@@ -181,7 +182,12 @@ private:
 
   constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
 
-  static constexpr size_t kCacheLineSize = 128;
+#ifdef __cpp_lib_hardware_interference_size
+  static constexpr size_t kCacheLineSize =
+      std::hardware_destructive_interference_size;
+#else
+  static constexpr size_t kCacheLineSize = 64;
+#endif
 
   struct Slot {
     ~Slot() noexcept {

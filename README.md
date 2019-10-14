@@ -136,7 +136,7 @@ the implementation:
   shared memory
 - [ ] Add benchmarks and compare to `boost::lockfree::queue` and others
 - [ ] Use C++20 concepts instead of `static_assert` if available
-- [ ] Use `std::hardware_destructive_interference_size` if available
+- [X] Use `std::hardware_destructive_interference_size` if available
 
 ## About
 
