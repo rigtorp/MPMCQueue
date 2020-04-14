@@ -14,7 +14,7 @@ target_include_directories(${PROJECT_NAME} INTERFACE
 # Tests and examples
 if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 	if (MSVC)
-		add_compile_options(/permissive- /W4)
+		add_compile_options(/permissive- /W4 /wd4172 /wd4324 /wd4530)
 	else()
 		add_compile_options(-Wall -Wextra -Wpedantic)
 	endif()
