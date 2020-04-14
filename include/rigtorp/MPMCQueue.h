@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2018 Erik Rigtorp <erik@rigtorp.se>
+Copyright (c) 2020 Erik Rigtorp <erik@rigtorp.se>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,14 +24,92 @@ SOFTWARE.
 
 #include <atomic>
 #include <cassert>
+#include <cstddef> // offsetof
 #include <limits>
 #include <memory>
 #include <new> // std::hardware_destructive_interference_size
 #include <stdexcept>
 
-namespace rigtorp {
+#ifndef __cpp_aligned_new
+#ifdef _WIN32
+#include <malloc.h> // _aligned_malloc
+#else
+#include <stdlib.h> // posix_memalign
+#endif
+#endif
 
-template <typename T> class MPMCQueue {
+namespace rigtorp {
+namespace mpmc {
+#ifdef __cpp_lib_hardware_interference_size
+static constexpr size_t hardwareInterferenceSize =
+    std::hardware_destructive_interference_size;
+#else
+static constexpr size_t hardwareInterferenceSize = 64;
+#endif
+
+#if defined(__cpp_aligned_new)
+template <typename T> using AlignedAllocator = std::allocator<T>;
+#else
+template <typename T> struct AlignedAllocator {
+  using value_type = T;
+
+  T *allocate(std::size_t n) {
+    if (n > std::numeric_limits<std::size_t>::max() / sizeof(T)) {
+      throw std::bad_array_new_length();
+    }
+#ifdef _WIN32
+    auto *p = static_cast<T *>(_aligned_malloc(sizeof(T) * n, alignof(T)));
+    if (p == nullptr) {
+      throw std::bad_alloc();
+    }
+#else
+    T *p;
+    if (posix_memalign(reinterpret_cast<void **>(&p), alignof(T),
+                       sizeof(T) * n) != 0) {
+      throw std::bad_alloc();
+    }
+#endif
+    return p;
+  }
+
+  void deallocate(T *p, std::size_t) {
+#ifdef WIN32
+    _aligned_free(p);
+#else
+    free(p);
+#endif
+  }
+};
+#endif
+
+template <typename T> struct Slot {
+  ~Slot() noexcept {
+    if (turn & 1) {
+      destroy();
+    }
+  }
+
+  template <typename... Args> void construct(Args &&... args) noexcept {
+    static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
+                  "T must be nothrow constructible with Args&&...");
+    new (&storage) T(std::forward<Args>(args)...);
+  }
+
+  void destroy() noexcept {
+    static_assert(std::is_nothrow_destructible<T>::value,
+                  "T must be nothrow destructible");
+    reinterpret_cast<T *>(&storage)->~T();
+  }
+
+  T &&move() noexcept { return reinterpret_cast<T &&>(storage); }
+
+  // Align to avoid false sharing between adjacent slots
+  alignas(hardwareInterferenceSize) std::atomic<size_t> turn = {0};
+  typename std::aligned_storage<sizeof(T), alignof(T)>::type storage;
+};
+
+template <typename T, typename Allocator = AlignedAllocator<Slot<T>>>
+class Queue {
 private:
   static_assert(std::is_nothrow_copy_assignable<T>::value ||
                     std::is_nothrow_move_assignable<T>::value,
@@ -41,51 +119,49 @@ private:
                 "T must be nothrow destructible");
 
 public:
-  explicit MPMCQueue(const size_t capacity)
-      : capacity_(capacity), head_(0), tail_(0) {
+  explicit Queue(const size_t capacity,
+                 const Allocator &allocator = Allocator())
+      : capacity_(capacity), allocator_(allocator), head_(0), tail_(0) {
     if (capacity_ < 1) {
       throw std::invalid_argument("capacity < 1");
     }
-    size_t space = capacity * sizeof(Slot) + kCacheLineSize - 1;
-    buf_ = malloc(space);
-    if (buf_ == nullptr) {
-      throw std::bad_alloc();
-    }
-    void *buf = buf_;
-    slots_ = reinterpret_cast<Slot *>(
-        std::align(kCacheLineSize, capacity * sizeof(Slot), buf, space));
-    if (slots_ == nullptr) {
-      free(buf_);
+    // Allocate one extra slot to prevent false sharing on the last slot
+    slots_ = allocator_.allocate(capacity_ + 1);
+    // Allocators are not required to honor alignment for over-aligned types
+    // (see http://eel.is/c++draft/allocator.requirements#10) so we verify
+    // alignment here
+    if (reinterpret_cast<size_t>(slots_) % alignof(Slot<T>) != 0) {
+      allocator_.deallocate(slots_, capacity_ + 1);
       throw std::bad_alloc();
     }
     for (size_t i = 0; i < capacity_; ++i) {
-      new (&slots_[i]) Slot();
+      new (&slots_[i]) Slot<T>();
     }
-    static_assert(sizeof(MPMCQueue<T>) % kCacheLineSize == 0,
-                  "MPMCQueue<T> size must be a multiple of cache line size to "
-                  "prevent false sharing between adjacent queues");
-    static_assert(sizeof(Slot) % kCacheLineSize == 0,
+    static_assert(
+        alignof(Slot<T>) == hardwareInterferenceSize,
+        "Slot must be aligned to cache line boundary to prevent false sharing");
+    static_assert(sizeof(Slot<T>) % hardwareInterferenceSize == 0,
                   "Slot size must be a multiple of cache line size to prevent "
                   "false sharing between adjacent slots");
-    assert(reinterpret_cast<size_t>(slots_) % kCacheLineSize == 0 &&
-           "slots_ array must be aligned to cache line size to prevent false "
-           "sharing between adjacent slots");
-    assert(reinterpret_cast<char *>(&tail_) -
-                   reinterpret_cast<char *>(&head_) >=
-               static_cast<std::ptrdiff_t>(kCacheLineSize) &&
-           "head and tail must be a cache line apart to prevent false sharing");
+    static_assert(sizeof(Queue) % hardwareInterferenceSize == 0,
+                  "Queue size must be a multiple of cache line size to "
+                  "prevent false sharing between adjacent queues");
+    static_assert(
+        offsetof(Queue, tail_) - offsetof(Queue, head_) ==
+            static_cast<std::ptrdiff_t>(hardwareInterferenceSize),
+        "head and tail must be a cache line apart to prevent false sharing");
   }
 
-  ~MPMCQueue() noexcept {
+  ~Queue() noexcept {
     for (size_t i = 0; i < capacity_; ++i) {
       slots_[i].~Slot();
     }
-    free(buf_);
+    allocator_.deallocate(slots_, capacity_ + 1);
   }
 
   // non-copyable and non-movable
-  MPMCQueue(const MPMCQueue &) = delete;
-  MPMCQueue &operator=(const MPMCQueue &) = delete;
+  Queue(const Queue &) = delete;
+  Queue &operator=(const Queue &) = delete;
 
   template <typename... Args> void emplace(Args &&... args) noexcept {
     static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
@@ -182,46 +258,23 @@ private:
 
   constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
 
-#ifdef __cpp_lib_hardware_interference_size
-  static constexpr size_t kCacheLineSize =
-      std::hardware_destructive_interference_size;
-#else
-  static constexpr size_t kCacheLineSize = 64;
-#endif
-
-  struct Slot {
-    ~Slot() noexcept {
-      if (turn & 1) {
-        destroy();
-      }
-    }
-
-    template <typename... Args> void construct(Args &&... args) noexcept {
-      static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
-                    "T must be nothrow constructible with Args&&...");
-      new (&storage) T(std::forward<Args>(args)...);
-    }
-
-    void destroy() noexcept {
-      static_assert(std::is_nothrow_destructible<T>::value,
-                    "T must be nothrow destructible");
-      reinterpret_cast<T *>(&storage)->~T();
-    }
-
-    T &&move() noexcept { return reinterpret_cast<T &&>(storage); }
-
-    // Align to avoid false sharing between adjacent slots
-    alignas(kCacheLineSize) std::atomic<size_t> turn = {0};
-    typename std::aligned_storage<sizeof(T), alignof(T)>::type storage;
-  };
-
 private:
   const size_t capacity_;
-  Slot *slots_;
-  void *buf_;
+  Slot<T> *slots_;
+#if defined(__has_cpp_attribute) && __has_cpp_attribute(no_unique_address)
+  Allocator allocator_ [[no_unique_address]];
+#else
+  Allocator allocator_;
+#endif
 
   // Align to avoid false sharing between head_ and tail_
-  alignas(kCacheLineSize) std::atomic<size_t> head_;
-  alignas(kCacheLineSize) std::atomic<size_t> tail_;
+  alignas(hardwareInterferenceSize) std::atomic<size_t> head_;
+  alignas(hardwareInterferenceSize) std::atomic<size_t> tail_;
 };
+} // namespace mpmc
+
+template <typename T,
+          typename Allocator = mpmc::AlignedAllocator<mpmc::Slot<T>>>
+using MPMCQueue = mpmc::Queue<T, Allocator>;
+
 } // namespace rigtorp
