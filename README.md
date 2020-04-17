@@ -59,11 +59,11 @@ t2.join();
   Try to enqueue an item using inplace construction. Returns `true` on
   success and `false` if queue is full.
 
-- `bool push(const T &v);`
+- `void push(const T &v);`
 
   Enqueue an item using copy construction. Blocks if queue is full.
 
-- `template <typename P> bool push(P &&v);`
+- `template <typename P> void push(P &&v);`
 
   Enqueue an item using move construction. Participates in overload
   resolution only if `std::is_nothrow_constructible<T, P&&>::value ==
@@ -132,7 +132,7 @@ the implementation:
 
 ## TODO
 
-- [ ] Add allocator supports so that the queue could be used with huge pages and
+- [X] Add allocator supports so that the queue could be used with huge pages and
   shared memory
 - [ ] Add benchmarks and compare to `boost::lockfree::queue` and others
 - [ ] Use C++20 concepts instead of `static_assert` if available
