@@ -1,6 +1,7 @@
 # MPMCQueue.h
 
 [![Build Status](https://travis-ci.org/rigtorp/MPMCQueue.svg?branch=master)](https://travis-ci.org/rigtorp/MPMCQueue)
+![C/C++ CI](https://github.com/rigtorp/MPMCQueue/workflows/C/C++%20CI/badge.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/rigtorp/MPMCQueue/master/LICENSE)
 
 A bounded multi-producer multi-consumer lock-free queue written in
@@ -137,6 +138,7 @@ the implementation:
 - [ ] Add benchmarks and compare to `boost::lockfree::queue` and others
 - [ ] Use C++20 concepts instead of `static_assert` if available
 - [X] Use `std::hardware_destructive_interference_size` if available
+- [ ] Add API for zero-copy deqeue and batch dequeue operations
 
 ## About
 
