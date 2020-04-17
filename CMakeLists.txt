@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.2)
 
-project(MPMCQueue LANGUAGES CXX)
+project(MPMCQueue VERSION 1.0 LANGUAGES CXX)
 
 add_library(${PROJECT_NAME} INTERFACE)
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
@@ -29,4 +29,43 @@ if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
 
 	enable_testing()
 	add_test(MPMCQueueTest MPMCQueueTest)
+endif()
+
+# Install
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+  COMPATIBILITY SameMajorVersion
+)
+
+export(
+    TARGETS ${PROJECT_NAME}
+    NAMESPACE ${PROJECT_NAME}::
+    FILE "${PROJECT_NAME}Config.cmake"
+)
+
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    install(
+        DIRECTORY "include/"
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    install(
+        TARGETS ${PROJECT_NAME}
+        EXPORT "${PROJECT_NAME}Config"
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    install(
+        EXPORT "${PROJECT_NAME}Config"
+        NAMESPACE ${PROJECT_NAME}::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+    )
+
+    install(
+        FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+    )
 endif()
