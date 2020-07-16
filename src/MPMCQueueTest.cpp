@@ -122,16 +122,77 @@ int main(int argc, char *argv[]) {
   {
     MPMCQueue<std::unique_ptr<int>> q(16);
     // lvalue
-    auto v = std::unique_ptr<int>(new int(1));
+    // auto v = std::unique_ptr<int>(new int(1));
     // q.emplace(v);
     // q.try_emplace(v);
     // q.push(v);
     // q.try_push(v);
     // xvalue
     q.emplace(std::unique_ptr<int>(new int(1)));
-    q.try_emplace(std::unique_ptr<int>(new int(1)));
-    q.push(std::unique_ptr<int>(new int(1)));
-    q.try_push(std::unique_ptr<int>(new int(1)));
+    q.try_emplace(std::unique_ptr<int>(new int(2)));
+    q.push(std::unique_ptr<int>(new int(3)));
+    q.try_push(std::unique_ptr<int>(new int(4)));
+
+    std::unique_ptr<int> v;
+    q.pop(v);
+    assert(*v == 1);
+    assert(q.try_pop(v) == true);
+    assert(*v == 2);
+    assert(q.try_consume([&v](auto &&w) noexcept { v = std::move(w); }) ==
+           true);
+    assert(*v == 3);
+  }
+
+  // Check that pointer have same address and value after moving through queue
+  {
+    MPMCQueue<std::unique_ptr<int>> q(1);
+    {
+      auto up = std::make_unique<int>(1);
+      auto *rp = up.get();
+      std::unique_ptr<int> up2;
+      assert(q.try_emplace(std::move(up)) == true);
+      assert(q.try_consume([&](std::unique_ptr<int> v) noexcept {
+        up2 = std::move(v);
+      }) == true);
+      assert(rp == up2.get());
+      assert(*up2 == 1);
+    }
+
+    {
+      auto up = std::make_unique<int>(1);
+      auto *rp = up.get();
+      std::unique_ptr<int> up2;
+      q.emplace(std::move(up));
+      assert(q.try_consume([&](std::unique_ptr<int> v) noexcept {
+        up2 = std::move(v);
+      }) == true);
+      assert(rp == up2.get());
+      assert(*up2 == 1);
+    }
+
+    {
+      auto up = std::make_unique<int>(1);
+      auto *rp = up.get();
+      std::unique_ptr<int> up2;
+      q.push(std::move(up));
+      assert(q.try_consume([&](std::unique_ptr<int> v) noexcept {
+        up2 = std::move(v);
+      }) == true);
+      assert(rp == up2.get());
+      assert(*up2 == 1);
+    }
+
+    {
+      auto up = std::make_unique<int>(1);
+      auto *rp = up.get();
+      std::unique_ptr<int> up2;
+      assert(q.try_push(std::move(up)) == true);
+      assert(q.try_consume([&](std::unique_ptr<int> v) noexcept {
+        up2 = std::move(v);
+      }) == true);
+      assert(rp == up2.get());
+      assert(*up2 == 1);
+    }
   }
 
   {
