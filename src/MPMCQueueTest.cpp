@@ -135,6 +135,20 @@ int main(int argc, char *argv[]) {
   }
 
   {
+    int counter = 0;
+    auto consumer = [&counter](int i) noexcept { counter += i; };
+
+    MPMCQueue<int> q(16);
+    assert(q.try_consume_until_current_head(consumer) == false);
+    q.push(1);
+    q.push(2);
+    q.push(3);
+    assert(q.try_consume_until_current_head(consumer) == true);
+    assert(counter == 6);
+    assert(q.try_consume_until_current_head(consumer) == false);
+  }
+
+  {
     bool throws = false;
     try {
       MPMCQueue<int> q(0);
