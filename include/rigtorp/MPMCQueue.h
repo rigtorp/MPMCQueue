@@ -168,10 +168,29 @@ public:
                   "T must be nothrow constructible with Args&&...");
     auto const head = head_.fetch_add(1);
     auto &slot = slots_[idx(head)];
+
+#if __cplusplus > 201703L
+    auto const tag = turn(head) * 2;
+    while (true)
+    {
+      auto const now = slot.turn.load(std::memory_order_acquire);
+      if (now == tag)
+        break;
+      slot.turn.wait(now, std::memory_order_relaxed);
+    }
+#else
     while (turn(head) * 2 != slot.turn.load(std::memory_order_acquire))
       ;
+#endif
+
     slot.construct(std::forward<Args>(args)...);
+
+#if __cplusplus > 201703L
+    slot.turn.store(tag + 1, std::memory_order_release);
+    slot.turn.notify_all();
+#else
     slot.turn.store(turn(head) * 2 + 1, std::memory_order_release);
+#endif
   }
 
   template <typename... Args> bool try_emplace(Args &&... args) noexcept {
@@ -184,6 +203,9 @@ public:
         if (head_.compare_exchange_strong(head, head + 1)) {
           slot.construct(std::forward<Args>(args)...);
           slot.turn.store(turn(head) * 2 + 1, std::memory_order_release);
+#if __cplusplus > 201703L
+          slot.turn.notify_all();
+#endif
           return true;
         }
       } else {
@@ -225,11 +247,31 @@ public:
   void pop(T &v) noexcept {
     auto const tail = tail_.fetch_add(1);
     auto &slot = slots_[idx(tail)];
+    
+#if __cplusplus > 201703L
+    auto const tag = turn(tail) * 2 + 1;
+    while (true)
+    {
+      auto const now = slot.turn.load(std::memory_order_acquire);
+      if (now == tag)
+        break;
+      slot.turn.wait(now, std::memory_order_relaxed);
+    }
+#else
     while (turn(tail) * 2 + 1 != slot.turn.load(std::memory_order_acquire))
       ;
+#endif
+
     v = slot.move();
     slot.destroy();
+    
+#if __cplusplus > 201703L
+    slot.turn.store(tag + 1, std::memory_order_release);
+    slot.turn.notify_all();
+#else
     slot.turn.store(turn(tail) * 2 + 2, std::memory_order_release);
+#endif
+
   }
 
   bool try_pop(T &v) noexcept {
@@ -241,6 +283,9 @@ public:
           v = slot.move();
           slot.destroy();
           slot.turn.store(turn(tail) * 2 + 2, std::memory_order_release);
+#if __cplusplus > 201703L
+          slot.turn.notify_all();
+#endif
           return true;
         }
       } else {
