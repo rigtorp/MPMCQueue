@@ -73,7 +73,7 @@ template <typename T> struct AlignedAllocator {
   }
 
   void deallocate(T *p, std::size_t) {
-#ifdef WIN32
+#ifdef _WIN32
     _aligned_free(p);
 #else
     free(p);
