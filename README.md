@@ -91,6 +91,21 @@ t2.join();
   Try to dequeue an item by copying or moving the item into
   `v`. Return `true` on sucess and `false` if the queue is empty.
 
+- `ssize_t size();`
+
+  Returns the number of elements in the queue.
+
+  The size can be negative when the queue is empty and there is at least one
+  reader waiting. Since this is a concurrent queue the size is only a best
+  effort guess until all reader and writer threads have been joined.
+
+- `bool empty();`
+
+  Returns true if the queue is empty.
+
+  Since this is a concurrent queue this is only a best effort guess until all
+  reader and writer threads have been joined.
+
 All operations except construction and destruction are thread safe.
 
 ## Implementation
@@ -138,6 +153,7 @@ implementation:
 - [ ] Use C++20 concepts instead of `static_assert` if available
 - [X] Use `std::hardware_destructive_interference_size` if available
 - [ ] Add API for zero-copy deqeue and batch dequeue operations
+- [ ] Add `[[nodiscard]]` attributes
 
 ## About
 

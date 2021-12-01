@@ -89,7 +89,7 @@ template <typename T> struct Slot {
     }
   }
 
-  template <typename... Args> void construct(Args &&... args) noexcept {
+  template <typename... Args> void construct(Args &&...args) noexcept {
     static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
                   "T must be nothrow constructible with Args&&...");
     new (&storage) T(std::forward<Args>(args)...);
@@ -163,7 +163,7 @@ public:
   Queue(const Queue &) = delete;
   Queue &operator=(const Queue &) = delete;
 
-  template <typename... Args> void emplace(Args &&... args) noexcept {
+  template <typename... Args> void emplace(Args &&...args) noexcept {
     static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
                   "T must be nothrow constructible with Args&&...");
     auto const head = head_.fetch_add(1);
@@ -174,7 +174,7 @@ public:
     slot.turn.store(turn(head) * 2 + 1, std::memory_order_release);
   }
 
-  template <typename... Args> bool try_emplace(Args &&... args) noexcept {
+  template <typename... Args> bool try_emplace(Args &&...args) noexcept {
     static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
                   "T must be nothrow constructible with Args&&...");
     auto head = head_.load(std::memory_order_acquire);
@@ -252,6 +252,21 @@ public:
       }
     }
   }
+
+  /// Returns the number of elements in the queue.
+  /// The size can be negative when the queue is empty and there is at least one
+  /// reader waiting. Since this is a concurrent queue the size is only a best
+  /// effort guess until all reader and writer threads have been joined.
+  ptrdiff_t size() const noexcept {
+    // TODO: How can we deal with wrapped queue on 32bit?
+    return static_cast<ptrdiff_t>(head_.load(std::memory_order_relaxed) -
+                                  tail_.load(std::memory_order_relaxed));
+  }
+
+  /// Returns true if the queue is empty.
+  /// Since this is a concurrent queue this is only a best effort guess
+  /// until all reader and writer threads have been joined.
+  bool empty() const noexcept { return size() <= 0; }
 
 private:
   constexpr size_t idx(size_t i) const noexcept { return i % capacity_; }

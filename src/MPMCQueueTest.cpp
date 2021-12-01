@@ -74,17 +74,21 @@ int main(int argc, char *argv[]) {
 
   {
     MPMCQueue<TestType> q(11);
+    assert(q.size() == 0 && q.empty());
     for (int i = 0; i < 10; i++) {
       q.emplace();
     }
+    assert(q.size() == 10 && !q.empty());
     assert(TestType::constructed.size() == 10);
 
     TestType t;
     q.pop(t);
+    assert(q.size() == 9 && !q.empty());
     assert(TestType::constructed.size() == 10);
 
     q.pop(t);
     q.emplace();
+    assert(q.size() == 9 && !q.empty());
     assert(TestType::constructed.size() == 10);
   }
   assert(TestType::constructed.size() == 0);
@@ -93,9 +97,13 @@ int main(int argc, char *argv[]) {
     MPMCQueue<int> q(1);
     int t = 0;
     assert(q.try_push(1) == true);
+    assert(q.size() == 1 && !q.empty());
     assert(q.try_push(2) == false);
+    assert(q.size() == 1 && !q.empty());
     assert(q.try_pop(t) == true && t == 1);
+    assert(q.size() == 0 && q.empty());
     assert(q.try_pop(t) == false && t == 1);
+    assert(q.size() == 0 && q.empty());
   }
 
   // Copyable only type
