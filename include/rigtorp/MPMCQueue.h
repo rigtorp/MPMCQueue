@@ -40,7 +40,7 @@ SOFTWARE.
 
 namespace rigtorp {
 namespace mpmc {
-#ifdef __cpp_lib_hardware_interference_size
+#if defined(__cpp_lib_hardware_interference_size) && !defined(__APPLE__)
 static constexpr size_t hardwareInterferenceSize =
     std::hardware_destructive_interference_size;
 #else
