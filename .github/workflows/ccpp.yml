@@ -23,10 +23,9 @@ jobs:
         
   build-windows:
 
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     strategy:
       matrix:
-        os: [windows-latest, windows-2016]
         config: [Debug, Release]
         standard: [11, 17]
     
