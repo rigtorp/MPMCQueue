@@ -257,7 +257,7 @@ public:
   /// The size can be negative when the queue is empty and there is at least one
   /// reader waiting. Since this is a concurrent queue the size is only a best
   /// effort guess until all reader and writer threads have been joined.
-  ptrdiff_t size() const noexcept {
+  [[nodiscard]] ptrdiff_t size() const noexcept {
     // TODO: How can we deal with wrapped queue on 32bit?
     return static_cast<ptrdiff_t>(head_.load(std::memory_order_relaxed) -
                                   tail_.load(std::memory_order_relaxed));
@@ -266,12 +266,12 @@ public:
   /// Returns true if the queue is empty.
   /// Since this is a concurrent queue this is only a best effort guess
   /// until all reader and writer threads have been joined.
-  bool empty() const noexcept { return size() <= 0; }
+  [[nodiscard]] bool empty() const noexcept { return size() <= 0; }
 
 private:
-  constexpr size_t idx(size_t i) const noexcept { return i % capacity_; }
+  [[nodiscard]] constexpr size_t idx(size_t i) const noexcept { return i % capacity_; }
 
-  constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
+  [[nodiscard]] constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
 
 private:
   const size_t capacity_;
