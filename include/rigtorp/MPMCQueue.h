@@ -34,8 +34,17 @@ SOFTWARE.
 #ifdef _WIN32
 #include <malloc.h> // _aligned_malloc
 #else
-#include <stdlib.h> // posix_memalign
+#include <cstdlib> // posix_memalign
 #endif
+#endif
+
+#ifdef __has_cpp_attribute
+#if __has_cpp_attribute(nodiscard)
+#define RIGTORP_NODISCARD [[nodiscard]]
+#endif
+#endif
+#ifndef RIGTORP_NODISCARD
+#define RIGTORP_NODISCARD
 #endif
 
 namespace rigtorp {
@@ -257,7 +266,7 @@ public:
   /// The size can be negative when the queue is empty and there is at least one
   /// reader waiting. Since this is a concurrent queue the size is only a best
   /// effort guess until all reader and writer threads have been joined.
-  [[nodiscard]] ptrdiff_t size() const noexcept {
+  RIGTORP_NODISCARD ptrdiff_t size() const noexcept {
     // TODO: How can we deal with wrapped queue on 32bit?
     return static_cast<ptrdiff_t>(head_.load(std::memory_order_relaxed) -
                                   tail_.load(std::memory_order_relaxed));
@@ -266,12 +275,16 @@ public:
   /// Returns true if the queue is empty.
   /// Since this is a concurrent queue this is only a best effort guess
   /// until all reader and writer threads have been joined.
-  [[nodiscard]] bool empty() const noexcept { return size() <= 0; }
+  RIGTORP_NODISCARD bool empty() const noexcept { return size() <= 0; }
 
 private:
-  [[nodiscard]] constexpr size_t idx(size_t i) const noexcept { return i % capacity_; }
+  RIGTORP_NODISCARD constexpr size_t idx(size_t i) const noexcept {
+    return i % capacity_;
+  }
 
-  [[nodiscard]] constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
+  RIGTORP_NODISCARD constexpr size_t turn(size_t i) const noexcept {
+    return i / capacity_;
+  }
 
 private:
   const size_t capacity_;
