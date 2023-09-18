@@ -25,6 +25,7 @@ SOFTWARE.
 #include <atomic>
 #include <cassert>
 #include <cstddef> // offsetof
+#include <cmath>   // log2
 #include <limits>
 #include <memory>
 #include <new> // std::hardware_destructive_interference_size
@@ -46,6 +47,8 @@ static constexpr size_t hardwareInterferenceSize =
 #else
 static constexpr size_t hardwareInterferenceSize = 64;
 #endif
+
+#define IS_POWER_OF_2(x) ((((x) - 1) & (x)) == 0)
 
 #if defined(__cpp_aligned_new)
 template <typename T> using AlignedAllocator = std::allocator<T>;
@@ -121,20 +124,29 @@ private:
 public:
   explicit Queue(const size_t capacity,
                  const Allocator &allocator = Allocator())
-      : capacity_(capacity), allocator_(allocator), head_(0), tail_(0) {
-    if (capacity_ < 1) {
+      : allocator_(allocator), head_(0), tail_(0) {
+    if (capacity < 1) {
       throw std::invalid_argument("capacity < 1");
     }
+    // Ensure that the queue length is an integer power of 2
+    if (!IS_POWER_OF_2(capacity)) {
+      // Mask of capacity
+      mask_ = round_to_power_of_2(capacity) - 1;
+    } else {
+      mask_ = capacity - 1;
+    }
+    // The power of final capacity
+    power_of_capacity_ = ::log2(mask_ + 1);
     // Allocate one extra slot to prevent false sharing on the last slot
-    slots_ = allocator_.allocate(capacity_ + 1);
+    slots_ = allocator_.allocate(mask_ + 2);
     // Allocators are not required to honor alignment for over-aligned types
     // (see http://eel.is/c++draft/allocator.requirements#10) so we verify
     // alignment here
     if (reinterpret_cast<size_t>(slots_) % alignof(Slot<T>) != 0) {
-      allocator_.deallocate(slots_, capacity_ + 1);
+      allocator_.deallocate(slots_, mask_ + 2);
       throw std::bad_alloc();
     }
-    for (size_t i = 0; i < capacity_; ++i) {
+    for (size_t i = 0; i < mask_ + 1; ++i) {
       new (&slots_[i]) Slot<T>();
     }
     static_assert(
@@ -153,10 +165,10 @@ public:
   }
 
   ~Queue() noexcept {
-    for (size_t i = 0; i < capacity_; ++i) {
+    for (size_t i = 0; i < mask_ + 1; ++i) {
       slots_[i].~Slot();
     }
-    allocator_.deallocate(slots_, capacity_ + 1);
+    allocator_.deallocate(slots_, mask_ + 2);
   }
 
   // non-copyable and non-movable
@@ -269,12 +281,27 @@ public:
   bool empty() const noexcept { return size() <= 0; }
 
 private:
-  constexpr size_t idx(size_t i) const noexcept { return i % capacity_; }
+  constexpr size_t idx(size_t i) const noexcept { return i & mask_; }
 
-  constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
+  constexpr size_t turn(size_t i) const noexcept { return i >> power_of_capacity_; }
+
+  constexpr size_t round_to_power_of_2(size_t v) const noexcept {
+    size_t _v = v - 1;
+    _v |= _v >> 1;
+    _v |= _v >> 2;
+    _v |= _v >> 4;
+    _v |= _v >> 8;
+    _v |= _v >> 16;
+    if (sizeof(size_t) == 8) {
+      _v |= _v >> 32;
+    }
+    ++_v;
+    return _v;
+  }
 
 private:
-  const size_t capacity_;
+  size_t mask_;
+  size_t power_of_capacity_; 
   Slot<T> *slots_;
 #if defined(__has_cpp_attribute) && __has_cpp_attribute(no_unique_address)
   Allocator allocator_ [[no_unique_address]];
