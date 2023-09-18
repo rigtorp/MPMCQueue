@@ -1,6 +1,5 @@
 # MPMCQueue.h
 
-[![Build Status](https://travis-ci.org/rigtorp/MPMCQueue.svg?branch=master)](https://travis-ci.org/rigtorp/MPMCQueue)
 ![C/C++ CI](https://github.com/rigtorp/MPMCQueue/workflows/C/C++%20CI/badge.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/rigtorp/MPMCQueue/master/LICENSE)
 
