@@ -10,9 +10,9 @@ jobs:
       matrix:
         config: [Debug, Release]
         standard: [11, 17]
-        
+
     container:
-      image: docker-libc:latest
+      image: ghcr.io/rishiniranjan/docker-libc:latest
 
     steps:
     - uses: actions/checkout@v1
