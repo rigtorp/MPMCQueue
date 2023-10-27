@@ -12,7 +12,7 @@ jobs:
         standard: [11, 17]
 
     container:
-      image: ghcr.io/rishiniranjan/docker-libc:latest
+      image: ghcr.io/rishiniranjan/docker-libc1:latest
 
     steps:
     - uses: actions/checkout@v1
