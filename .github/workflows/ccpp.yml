@@ -4,14 +4,12 @@ on: [push]
 
 jobs:
   build-ubuntu:
-
     runs-on: ubuntu-latest
-
     container:
       image: ghcr.io/rishiniranjan/docker-libc1:latest
       credentials:
         username: rishiniranjan
-        password: ${{ secrets.RI_SECRET }}
+        password: ${{ secrets.R_SECRET }}
 
     steps:
     - uses: actions/checkout@v1
