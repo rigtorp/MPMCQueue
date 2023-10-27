@@ -6,13 +6,12 @@ jobs:
   build-ubuntu:
 
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        config: [Debug, Release]
-        standard: [11, 17]
 
     container:
       image: ghcr.io/rishiniranjan/docker-libc1:latest
+      credentials:
+        username: rishiniranjan
+        password: ${{ secrets.RI_SECRET }}
 
     steps:
     - uses: actions/checkout@v1
