@@ -12,11 +12,32 @@ jobs:
         password: ${{ secrets.R_SECRET }}
 
     steps:
-    - uses: actions/checkout@v1
-    - name: Build & Test
-      run: |
-        cmake -E remove_directory build
-        cmake -B build -S . -DCMAKE_BUILD_TYPE=${{ matrix.config }} -DCMAKE_CXX_STANDARD=${{ matrix.standard }} -DCMAKE_CXX_FLAGS="-Werror -fsanitize=address,undefined"
-        cmake --build build
-        cd build
-        ctest --output-on-failure
+    - name: Import Secrets
+      uses: hashicorp/vault-action@v2.4.0
+      id: secrets
+      with:
+        url: https://vault.afdevops.com
+        method: jwt
+        role: jwt-github-partner-role
+        path: jwt-github-partner
+        jwtGithubAudience: https://github.com/AnchorFreePartner
+        exportEnv: false
+        secrets: |
+          secret/devops/github/afhydra-service-account ssh_private | GH_SSH_PRIV_KEY ;
+          secret/devops/github/afhydra-service-account ssh_pub | GH_SSH_PUB_KEY
+
+    - name: Install SSH key
+      uses: shimataro/ssh-key-action@v2
+      with:
+        key: ${{ steps.secrets.outputs.GH_SSH_PRIV_KEY }}
+        name: id_rsa
+        known_hosts: ${{ steps.secrets.outputs.GH_SSH_PUB_KEY }}
+        config: |
+            UserKnownHostsFile /dev/null
+            StrictHostKeyChecking no
+
+    - name: Checkout repository
+      uses: actions/checkout@v1
+
+    - name: Clone hydra
+      run: git clone git@github.com:AnchorFree/hydra.git
