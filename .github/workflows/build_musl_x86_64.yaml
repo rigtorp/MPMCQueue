@@ -1,0 +1,49 @@
+name: "Build and push 2"
+on: 
+  workflow_dispatch:
+      inputs:
+      TargetPlatformName:
+        description: 'Target platform'
+        required: true
+
+permissions:
+  # For jwt auth in 'Import Secrets' step
+  id-token: write
+  contents: read
+  # For codeql steps
+  actions: read
+  security-events: write
+ 
+jobs:
+  build_and_push:
+    runs-on: ubuntu-latest
+    env:
+      SERVICE_NAME: ${{ github.event.inputs.TargetPlatformName }}
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Prepare docker tag
+        id: prep
+        run: |
+          set -x
+          TAG=gcr.io/af-image/dboo-${{ env.SERVICE_NAME }}
+          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+
+      - name: Login to GCR
+        uses: docker/login-action@v3.0.0
+        with:
+          registry: gcr.io
+          username: _json_key
+          password: ${{ secrets.GCR_PUSH_TOKEN }}
+
+      - name: Build and push
+        id: docker_build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./dockerfile
+          push: true
+          tags: ${{ steps.prep.outputs.tag }}
+          build-args: TARGET_PLATFORM=${{ env.SERVICE_NAME }}
