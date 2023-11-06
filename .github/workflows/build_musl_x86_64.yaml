@@ -2,9 +2,10 @@ name: "Build and push 2"
 on: 
   workflow_dispatch:
       inputs:
-      TargetPlatformName:
-        description: 'Target platform'
-        required: true
+        TargetPlatformName:
+          description: 'Target platform'
+          type: string
+          required: true
 
 permissions:
   # For jwt auth in 'Import Secrets' step
