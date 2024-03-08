@@ -1,48 +1,48 @@
-name: C/C++ CI
+# name: C/C++ CI
 
-on: [push]
+# on: [push]
 
-jobs:
-  build-ubuntu:
-    runs-on: ubuntu-latest
-    permissions:
-      actions: read
-      id-token: write
-      contents: read
-      security-events: write
-    container:
-      image: ghcr.io/rishiniranjan/docker-libc1:latest
-      credentials:
-        username: rishiniranjan
-        password: ${{ secrets.R_SECRET }}
+# jobs:
+#   build-ubuntu:
+#     runs-on: ubuntu-latest
+#     permissions:
+#       actions: read
+#       id-token: write
+#       contents: read
+#       security-events: write
+#     container:
+#       image: ghcr.io/rishiniranjan/docker-libc1:latest
+#       credentials:
+#         username: rishiniranjan
+#         password: ${{ secrets.R_SECRET }}
 
-    steps:
-    - name: Import Secrets
-      uses: hashicorp/vault-action@v2.4.0
-      id: secrets
-      with:
-        url: https://vault.afdevops.com
-        method: jwt
-        role: jwt-github-partner-role
-        path: jwt-github-partner
-        jwtGithubAudience: https://github.com/AnchorFreePartner
-        exportEnv: false
-        secrets: |
-          secret/devops/github/afhydra-service-account ssh_private | GH_SSH_PRIV_KEY ;
-          secret/devops/github/afhydra-service-account ssh_pub | GH_SSH_PUB_KEY
+#     steps:
+#     - name: Import Secrets
+#       uses: hashicorp/vault-action@v2.4.0
+#       id: secrets
+#       with:
+#         url: https://vault.afdevops.com
+#         method: jwt
+#         role: jwt-github-partner-role
+#         path: jwt-github-partner
+#         jwtGithubAudience: https://github.com/AnchorFreePartner
+#         exportEnv: false
+#         secrets: |
+#           secret/devops/github/afhydra-service-account ssh_private | GH_SSH_PRIV_KEY ;
+#           secret/devops/github/afhydra-service-account ssh_pub | GH_SSH_PUB_KEY
 
-    - name: Install SSH key
-      uses: shimataro/ssh-key-action@v2
-      with:
-        key: ${{ steps.secrets.outputs.GH_SSH_PRIV_KEY }}
-        name: id_rsa
-        known_hosts: ${{ steps.secrets.outputs.GH_SSH_PUB_KEY }}
-        config: |
-            UserKnownHostsFile /dev/null
-            StrictHostKeyChecking no
+#     - name: Install SSH key
+#       uses: shimataro/ssh-key-action@v2
+#       with:
+#         key: ${{ steps.secrets.outputs.GH_SSH_PRIV_KEY }}
+#         name: id_rsa
+#         known_hosts: ${{ steps.secrets.outputs.GH_SSH_PUB_KEY }}
+#         config: |
+#             UserKnownHostsFile /dev/null
+#             StrictHostKeyChecking no
 
-    - name: Checkout repository
-      uses: actions/checkout@v1
+#     - name: Checkout repository
+#       uses: actions/checkout@v1
 
-    - name: Clone hydra
-      run: git clone git@github.com:AnchorFree/hydra.git
+#     - name: Clone hydra
+#       run: git clone git@github.com:AnchorFree/hydra.git
