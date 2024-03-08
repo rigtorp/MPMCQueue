@@ -26,3 +26,14 @@ jobs:
 
       - name: Build with CMake
         run: cmake --build build
+
+      - name: Archive build artifacts
+        run: |
+          zip -r output.zip build/MPMCQueueExample
+        shell: bash
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: build-artifacts
+          path: output.zip
