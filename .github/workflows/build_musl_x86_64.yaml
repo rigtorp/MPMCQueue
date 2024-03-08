@@ -1,15 +1,6 @@
 name: "Build and push 2"
 on: 
   workflow_dispatch:
-      inputs:
-        TargetPlatformName:
-          description: 'Target platform'
-          type: string
-          required: true
-  pull_request:
-    branches:
-      - releases/**
-      - master
   push:
     tags:
       - v[0-9]+.[0-9]+.[0-9]+
