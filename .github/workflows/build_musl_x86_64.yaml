@@ -37,3 +37,4 @@ jobs:
         with:
           name: build-artifacts
           path: output.zip
+        if: startsWith(github.ref, 'refs/tags/')
