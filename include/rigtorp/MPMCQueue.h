@@ -22,6 +22,7 @@ SOFTWARE.
 
 #pragma once
 
+#include <array>
 #include <atomic>
 #include <cassert>
 #include <cstddef> // offsetof
@@ -81,6 +82,11 @@ template <typename T> struct AlignedAllocator {
   }
 };
 #endif
+#if defined(__cpp_lib_byte) && !defined(__APPLE__)
+using Byte = std::byte;
+#else
+using Byte = unsigned char;
+#endif
 
 template <typename T> struct Slot {
   ~Slot() noexcept {
@@ -105,7 +111,7 @@ template <typename T> struct Slot {
 
   // Align to avoid false sharing between adjacent slots
   alignas(hardwareInterferenceSize) std::atomic<size_t> turn = {0};
-  typename std::aligned_storage<sizeof(T), alignof(T)>::type storage;
+  alignas(T) std::array<Byte, sizeof(T)> storage;
 };
 
 template <typename T, typename Allocator = AlignedAllocator<Slot<T>>>
