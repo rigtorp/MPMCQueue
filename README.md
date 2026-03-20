@@ -15,7 +15,7 @@ It's battle hardened and used daily in production:
   - [Need for Speed: Payback (2017)](https://www.ea.com/games/need-for-speed/need-for-speed-payback)
 - In the low latency trading infrastructure at [Charlesworth
   Research](https://www.charlesworthresearch.com/) and [Marquette
-  Partners](https://www.marquettepartners.com/).
+  Partners](https://www.marquettepartnersholdingsllc.com/).
 
 It's been cited by the following papers:
 - Peizhao Ou and Brian Demsky. 2018. Towards understanding the costs of avoiding
