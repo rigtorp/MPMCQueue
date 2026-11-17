@@ -1,71 +1,83 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.24...4.3)
 
-project(MPMCQueue VERSION 1.0 LANGUAGES CXX)
+project(MPMCQueue
+  VERSION 1.0.0
+  HOMEPAGE_URL "https://github.com/rigtorp/MPMCQueue"
+  LANGUAGES CXX
+)
 
+# -----------------------------------------------------------------------------
+# Library Target
+# -----------------------------------------------------------------------------
 add_library(${PROJECT_NAME} INTERFACE)
 add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
 
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_11)
-
-target_include_directories(${PROJECT_NAME} INTERFACE
-		$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-		$<INSTALL_INTERFACE:include>)
-
-# Tests and examples
-if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-	if (MSVC)
-		add_compile_options(/permissive- /W4 /wd4172 /wd4324 /wd4530)
-	else()
-		add_compile_options(-Wall -Wextra -Wpedantic)
-	endif()
-
-	find_package(Threads REQUIRED)
-
-	add_executable(MPMCQueueExample src/MPMCQueueExample.cpp)
-	target_link_libraries(MPMCQueueExample MPMCQueue Threads::Threads)
-
-	add_executable(MPMCQueueTest src/MPMCQueueTest.cpp)
-	target_link_libraries(MPMCQueueTest MPMCQueue Threads::Threads)
-
-	enable_testing()
-	add_test(MPMCQueueTest MPMCQueueTest)
-endif()
-
-# Install
-include(GNUInstallDirs)
-include(CMakePackageConfigHelpers)
-
-write_basic_package_version_file(
-  "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-  COMPATIBILITY SameMajorVersion
+target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_20)
+target_sources(${PROJECT_NAME} INTERFACE
+  FILE_SET HEADERS
+  BASE_DIRS include
+  FILES include/rigtorp/MPMCQueue.h
 )
 
-export(
+# -----------------------------------------------------------------------------
+# Tests & Examples (Top-Level Only)
+# -----------------------------------------------------------------------------
+include(CTest)
+
+if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
+  find_package(Threads REQUIRED)
+
+  function(mpmcqueue_executable target source)
+    add_executable(${target} ${source})
+    target_link_libraries(${target} PRIVATE
+      ${PROJECT_NAME}::${PROJECT_NAME}
+      Threads::Threads
+    )
+    set_target_properties(${target} PROPERTIES
+      CXX_EXTENSIONS OFF
+      COMPILE_WARNING_AS_ERROR ON
+    )
+    target_compile_options(${target} PRIVATE
+      "$<$<CXX_COMPILER_ID:MSVC>:/permissive-;/W4;/wd4324;/w14242>"
+      "$<$<CXX_COMPILER_ID:GNU,Clang,AppleClang>:-Wall;-Wextra;-Wpedantic;-Wshadow;-Wconversion;-Wsign-conversion;-Wold-style-cast;-Wundef;-Wcast-align;-Wzero-as-null-pointer-constant;-Wformat=2>"
+      "$<$<AND:$<CXX_COMPILER_ID:GNU>,$<VERSION_GREATER_EQUAL:$<CXX_COMPILER_VERSION>,12>>:-Wno-interference-size>"
+    )
+  endfunction()
+
+  mpmcqueue_executable(MPMCQueueExample src/MPMCQueueExample.cpp)
+  mpmcqueue_executable(MPMCQueueTest src/MPMCQueueTest.cpp)
+  add_test(NAME MPMCQueueTest COMMAND MPMCQueueTest)
+endif()
+
+# -----------------------------------------------------------------------------
+# Installation & Package Export
+# -----------------------------------------------------------------------------
+if(PROJECT_IS_TOP_LEVEL)
+  include(GNUInstallDirs)
+  include(CMakePackageConfigHelpers)
+
+  export(
     TARGETS ${PROJECT_NAME}
     NAMESPACE ${PROJECT_NAME}::
     FILE "${PROJECT_NAME}Config.cmake"
-)
+  )
 
-if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-    install(
-        DIRECTORY "include/"
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+    COMPATIBILITY SameMajorVersion
+    ARCH_INDEPENDENT
+  )
 
-    install(
-        TARGETS ${PROJECT_NAME}
-        EXPORT "${PROJECT_NAME}Config"
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    )
+  install(TARGETS ${PROJECT_NAME} EXPORT ${PROJECT_NAME}Config FILE_SET HEADERS)
 
-    install(
-        EXPORT "${PROJECT_NAME}Config"
-        NAMESPACE ${PROJECT_NAME}::
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
-    )
+  install(
+    EXPORT ${PROJECT_NAME}Config
+    NAMESPACE ${PROJECT_NAME}::
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+  )
 
-    install(
-        FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
-        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
-    )
+  install(
+    FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake"
+    DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}"
+  )
 endif()

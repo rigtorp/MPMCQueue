@@ -5,3 +5,4 @@ cmake-build-*
 .idea/
 .project
 *~
+CMakeUserPresets.json

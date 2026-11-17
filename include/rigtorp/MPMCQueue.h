@@ -43,15 +43,15 @@ SOFTWARE.
 namespace rigtorp {
 namespace mpmc {
 #if defined(__cpp_lib_hardware_interference_size) && !defined(__APPLE__)
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Winterference-size"
-#endif // #ifdef __GNUC__
+#endif
 static constexpr size_t hardwareInterferenceSize =
     std::hardware_destructive_interference_size;
-#ifdef __GNUC__
+#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
 #pragma GCC diagnostic pop
-#endif // #ifdef __GNUC__
+#endif
 #else
 static constexpr size_t hardwareInterferenceSize = 64;
 #endif
