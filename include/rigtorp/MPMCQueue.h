@@ -22,81 +22,32 @@ SOFTWARE.
 
 #pragma once
 
-#include <array>
 #include <atomic>
-#include <cassert>
-#include <cstddef> // offsetof
+#include <cstddef>
+#include <cstdint>
 #include <limits>
 #include <memory>
-#include <new> // std::hardware_destructive_interference_size
+#include <new>
 #include <stdexcept>
 #include <type_traits>
-
-#ifndef __cpp_aligned_new
-#ifdef _WIN32
-#include <malloc.h> // _aligned_malloc
-#else
-#include <stdlib.h> // posix_memalign
-#endif
-#endif
+#include <utility>
 
 namespace rigtorp {
 namespace mpmc {
-#if defined(__cpp_lib_hardware_interference_size) && !defined(__APPLE__)
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Winterference-size"
-#endif
-static constexpr size_t hardwareInterferenceSize =
-    std::hardware_destructive_interference_size;
-#if defined(__GNUC__) && !defined(__clang__) && __GNUC__ >= 12
-#pragma GCC diagnostic pop
-#endif
+
+#if defined(__s390x__)
+inline constexpr std::size_t kFalseSharingRange = 256;
+#elif defined(__APPLE__) && defined(__aarch64__)
+inline constexpr std::size_t kFalseSharingRange = 128;
 #else
-static constexpr size_t hardwareInterferenceSize = 64;
+inline constexpr std::size_t kFalseSharingRange = 64;
 #endif
 
-#if defined(__cpp_aligned_new)
 template <typename T> using AlignedAllocator = std::allocator<T>;
-#else
-template <typename T> struct AlignedAllocator {
-  using value_type = T;
-
-  T *allocate(std::size_t n) {
-    if (n > std::numeric_limits<std::size_t>::max() / sizeof(T)) {
-      throw std::bad_array_new_length();
-    }
-#ifdef _WIN32
-    auto *p = static_cast<T *>(_aligned_malloc(sizeof(T) * n, alignof(T)));
-    if (p == nullptr) {
-      throw std::bad_alloc();
-    }
-#else
-    T *p;
-    if (posix_memalign(reinterpret_cast<void **>(&p), alignof(T),
-                       sizeof(T) * n) != 0) {
-      throw std::bad_alloc();
-    }
-#endif
-    return p;
-  }
-
-  void deallocate(T *p, std::size_t) {
-#ifdef _WIN32
-    _aligned_free(p);
-#else
-    free(p);
-#endif
-  }
-};
-#endif
-#if defined(__cpp_lib_byte) && !defined(__APPLE__)
-using Byte = std::byte;
-#else
-using Byte = unsigned char;
-#endif
 
 template <typename T> struct Slot {
+  Slot() noexcept : turn(0) {}
+
   ~Slot() noexcept {
     if (turn & 1) {
       destroy();
@@ -104,71 +55,62 @@ template <typename T> struct Slot {
   }
 
   template <typename... Args> void construct(Args &&...args) noexcept {
-    static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
-                  "T must be nothrow constructible with Args&&...");
-    new (&storage) T(std::forward<Args>(args)...);
+    std::construct_at(reinterpret_cast<T *>(storage),
+                      std::forward<Args>(args)...);
   }
 
-  void destroy() noexcept {
-    static_assert(std::is_nothrow_destructible<T>::value,
-                  "T must be nothrow destructible");
-    reinterpret_cast<T *>(&storage)->~T();
-  }
+  void destroy() noexcept { std::destroy_at(value()); }
 
-  T &&move() noexcept { return reinterpret_cast<T &&>(storage); }
+  T &&move() noexcept { return std::move(*value()); }
 
-  // Align to avoid false sharing between adjacent slots
-  alignas(hardwareInterferenceSize) std::atomic<size_t> turn = {0};
-  alignas(T) std::array<Byte, sizeof(T)> storage;
+  // Align to avoid false sharing between adjacent slots.
+  alignas(kFalseSharingRange) std::atomic<std::size_t> turn;
+
+private:
+  T *value() noexcept { return std::launder(reinterpret_cast<T *>(storage)); }
+
+  alignas(T) std::byte storage[sizeof(T)];
 };
 
 template <typename T, typename Allocator = AlignedAllocator<Slot<T>>>
+  requires std::is_nothrow_destructible_v<T>
 class Queue {
-private:
-  static_assert(std::is_nothrow_copy_assignable<T>::value ||
-                    std::is_nothrow_move_assignable<T>::value,
-                "T must be nothrow copy or move assignable");
-
-  static_assert(std::is_nothrow_destructible<T>::value,
-                "T must be nothrow destructible");
-
 public:
-  explicit Queue(const size_t capacity,
+  explicit Queue(const std::size_t capacity,
                  const Allocator &allocator = Allocator())
       : capacity_(capacity), allocator_(allocator), head_(0), tail_(0) {
-    if (capacity_ < 1) {
+    if (capacity_ == 0) [[unlikely]] {
       throw std::invalid_argument("capacity < 1");
+    }
+    if (capacity_ == std::numeric_limits<std::size_t>::max()) [[unlikely]] {
+      throw std::bad_array_new_length();
     }
     // Allocate one extra slot to prevent false sharing on the last slot
     slots_ = allocator_.allocate(capacity_ + 1);
     // Allocators are not required to honor alignment for over-aligned types
     // (see http://eel.is/c++draft/allocator.requirements#10) so we verify
     // alignment here
-    if (reinterpret_cast<size_t>(slots_) % alignof(Slot<T>) != 0) {
+    if (reinterpret_cast<std::uintptr_t>(slots_) % alignof(Slot<T>) != 0) [[unlikely]] {
       allocator_.deallocate(slots_, capacity_ + 1);
       throw std::bad_alloc();
     }
-    for (size_t i = 0; i < capacity_; ++i) {
-      new (&slots_[i]) Slot<T>();
+    for (std::size_t i = 0; i < capacity_; ++i) {
+      std::construct_at(&slots_[i]);
     }
     static_assert(
-        alignof(Slot<T>) == hardwareInterferenceSize,
+        alignof(Slot<T>) >= kFalseSharingRange,
         "Slot must be aligned to cache line boundary to prevent false sharing");
-    static_assert(sizeof(Slot<T>) % hardwareInterferenceSize == 0,
+    static_assert(sizeof(Slot<T>) % kFalseSharingRange == 0,
                   "Slot size must be a multiple of cache line size to prevent "
                   "false sharing between adjacent slots");
-    static_assert(sizeof(Queue) % hardwareInterferenceSize == 0,
+    static_assert(sizeof(Queue) % kFalseSharingRange == 0,
                   "Queue size must be a multiple of cache line size to "
                   "prevent false sharing between adjacent queues");
-    static_assert(
-        offsetof(Queue, tail_) - offsetof(Queue, head_) ==
-            static_cast<std::ptrdiff_t>(hardwareInterferenceSize),
-        "head and tail must be a cache line apart to prevent false sharing");
   }
 
   ~Queue() noexcept {
-    for (size_t i = 0; i < capacity_; ++i) {
-      slots_[i].~Slot();
+    for (std::size_t i = 0; i < capacity_; ++i) {
+      std::destroy_at(&slots_[i]);
     }
     allocator_.deallocate(slots_, capacity_ + 1);
   }
@@ -177,9 +119,9 @@ public:
   Queue(const Queue &) = delete;
   Queue &operator=(const Queue &) = delete;
 
-  template <typename... Args> void emplace(Args &&...args) noexcept {
-    static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
-                  "T must be nothrow constructible with Args&&...");
+  template <typename... Args>
+    requires std::is_nothrow_constructible_v<T, Args &&...>
+  void emplace(Args &&...args) noexcept {
     auto const head = head_.fetch_add(1);
     auto &slot = slots_[idx(head)];
     auto const t = turn(head);
@@ -189,9 +131,9 @@ public:
     slot.turn.store(t * 2 + 1, std::memory_order_release);
   }
 
-  template <typename... Args> bool try_emplace(Args &&...args) noexcept {
-    static_assert(std::is_nothrow_constructible<T, Args &&...>::value,
-                  "T must be nothrow constructible with Args&&...");
+  template <typename... Args>
+    requires std::is_nothrow_constructible_v<T, Args &&...>
+  [[nodiscard]] bool try_emplace(Args &&...args) noexcept {
     auto head = head_.load(std::memory_order_acquire);
     for (;;) {
       auto &slot = slots_[idx(head)];
@@ -212,79 +154,63 @@ public:
     }
   }
 
-  void push(const T &v) noexcept {
-    static_assert(std::is_nothrow_copy_constructible<T>::value,
-                  "T must be nothrow copy constructible");
+  void push(const T &v) noexcept
+    requires std::is_nothrow_copy_constructible_v<T>
+  {
     emplace(v);
   }
 
-  template <typename P,
-            typename = typename std::enable_if<
-                std::is_nothrow_constructible<T, P &&>::value>::type>
+  template <typename P>
+    requires std::is_nothrow_constructible_v<T, P &&>
   void push(P &&v) noexcept {
     emplace(std::forward<P>(v));
   }
 
-  bool try_push(const T &v) noexcept {
-    static_assert(std::is_nothrow_copy_constructible<T>::value,
-                  "T must be nothrow copy constructible");
+  [[nodiscard]] bool try_push(const T &v) noexcept
+    requires std::is_nothrow_copy_constructible_v<T>
+  {
     return try_emplace(v);
   }
 
-  template <typename P,
-            typename = typename std::enable_if<
-                std::is_nothrow_constructible<T, P &&>::value>::type>
-  bool try_push(P &&v) noexcept {
+  template <typename P>
+    requires std::is_nothrow_constructible_v<T, P &&>
+  [[nodiscard]] bool try_push(P &&v) noexcept {
     return try_emplace(std::forward<P>(v));
   }
 
-  void pop(T &v) noexcept {
+  void pop(T &v) noexcept
+    requires(std::is_nothrow_move_assignable_v<T> ||
+             std::is_nothrow_copy_assignable_v<T>)
+  {
     auto const tail = tail_.fetch_add(1);
     auto &slot = slots_[idx(tail)];
     auto const t = turn(tail);
     while (t * 2 + 1 != slot.turn.load(std::memory_order_acquire))
       ;
-    v = slot.move();
+    assign(v, slot.move());
     slot.destroy();
     slot.turn.store(t * 2 + 2, std::memory_order_release);
   }
 
-  bool try_pop(T &v) noexcept {
-    auto tail = tail_.load(std::memory_order_acquire);
-    for (;;) {
-      auto &slot = slots_[idx(tail)];
-      auto const t = turn(tail);
-      if (t * 2 + 1 == slot.turn.load(std::memory_order_acquire)) {
-        if (tail_.compare_exchange_strong(tail, tail + 1)) {
-          v = slot.move();
-          slot.destroy();
-          slot.turn.store(t * 2 + 2, std::memory_order_release);
-          return true;
-        }
-      } else {
-        auto const prevTail = tail;
-        tail = tail_.load(std::memory_order_acquire);
-        if (tail == prevTail) {
-          return false;
-        }
-      }
-    }
+  [[nodiscard]] bool try_pop(T &v) noexcept
+    requires(std::is_nothrow_move_assignable_v<T> ||
+             std::is_nothrow_copy_assignable_v<T>)
+  {
+    return try_consume([&v](T &&item) noexcept { assign(v, std::move(item)); });
   }
 
-  template <typename Consumer> bool try_consume(Consumer &&c) noexcept {
-#ifdef __cpp_lib_is_invocable
-    static_assert(std::is_nothrow_invocable_v<Consumer, T &&>,
-                  "Consumer must be noexcept invocable with T&&");
-#endif
+  template <typename Consumer>
+    requires requires(Consumer &&c, T &&item) {
+      { std::forward<Consumer>(c)(std::move(item)) } noexcept;
+    }
+  [[nodiscard]] bool try_consume(Consumer &&c) noexcept {
     auto tail = tail_.load(std::memory_order_acquire);
     for (;;) {
       auto &slot = slots_[idx(tail)];
       auto const t = turn(tail);
       if (t * 2 + 1 == slot.turn.load(std::memory_order_acquire)) {
         if (tail_.compare_exchange_strong(tail, tail + 1)) {
-          static_assert(noexcept(c(slot.move())),
-                        "Consumer must be noexcept invocable with T&&");
-          c(slot.move());
+          std::forward<Consumer>(c)(slot.move());
           slot.destroy();
           slot.turn.store(t * 2 + 2, std::memory_order_release);
           return true;
@@ -303,33 +229,38 @@ public:
   /// The size can be negative when the queue is empty and there is at least one
   /// reader waiting. Since this is a concurrent queue the size is only a best
   /// effort guess until all reader and writer threads have been joined.
-  ptrdiff_t size() const noexcept {
+  [[nodiscard]] std::ptrdiff_t size() const noexcept {
     // TODO: How can we deal with wrapped queue on 32bit?
-    return static_cast<ptrdiff_t>(head_.load(std::memory_order_relaxed) -
+    return static_cast<std::ptrdiff_t>(head_.load(std::memory_order_relaxed) -
                                   tail_.load(std::memory_order_relaxed));
   }
 
   /// Returns true if the queue is empty.
   /// Since this is a concurrent queue this is only a best effort guess
   /// until all reader and writer threads have been joined.
-  bool empty() const noexcept { return size() <= 0; }
-private:
-  constexpr size_t idx(size_t i) const noexcept { return i % capacity_; }
-
-  constexpr size_t turn(size_t i) const noexcept { return i / capacity_; }
+  [[nodiscard]] bool empty() const noexcept { return size() <= 0; }
 
 private:
-  const size_t capacity_;
+  static void assign(T &destination, T &&item) noexcept {
+    if constexpr (std::is_nothrow_move_assignable_v<T>) {
+      destination = std::move(item);
+    } else {
+      destination = std::as_const(item);
+    }
+  }
+
+  constexpr std::size_t idx(std::size_t i) const noexcept { return i % capacity_; }
+
+  constexpr std::size_t turn(std::size_t i) const noexcept { return i / capacity_; }
+
+private:
+  const std::size_t capacity_;
   Slot<T> *slots_;
-#if defined(__has_cpp_attribute) && __has_cpp_attribute(no_unique_address)
-  Allocator allocator_ [[no_unique_address]];
-#else
-  Allocator allocator_;
-#endif
+  [[no_unique_address]] Allocator allocator_;
 
   // Align to avoid false sharing between head_ and tail_
-  alignas(hardwareInterferenceSize) std::atomic<size_t> head_;
-  alignas(hardwareInterferenceSize) std::atomic<size_t> tail_;
+  alignas(kFalseSharingRange) std::atomic<std::size_t> head_;
+  alignas(kFalseSharingRange) std::atomic<std::size_t> tail_;
 };
 } // namespace mpmc
 
