@@ -46,6 +46,43 @@ if(PROJECT_IS_TOP_LEVEL AND BUILD_TESTING)
   mpmcqueue_executable(MPMCQueueExample src/MPMCQueueExample.cpp)
   mpmcqueue_executable(MPMCQueueTest src/MPMCQueueTest.cpp)
   add_test(NAME MPMCQueueTest COMMAND MPMCQueueTest)
+
+  option(MPMCQueue_COVERAGE "Check MC/DC coverage with gcov" OFF)
+  if(MPMCQueue_COVERAGE)
+    if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+      message(FATAL_ERROR "MPMCQueue_COVERAGE requires GCC 14 or newer")
+    endif()
+    if(CMAKE_CONFIGURATION_TYPES)
+      message(FATAL_ERROR "MPMCQueue_COVERAGE requires a single-config generator")
+    endif()
+
+    target_compile_options(MPMCQueueTest PRIVATE
+      -O0 --coverage -fcondition-coverage -fprofile-update=atomic
+    )
+    target_link_options(MPMCQueueTest PRIVATE --coverage)
+
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    get_filename_component(compiler_dir "${CMAKE_CXX_COMPILER}" DIRECTORY)
+    if(CMAKE_CXX_COMPILER MATCHES "g[+][+](-[0-9]+)$")
+      set(gcov_name "gcov${CMAKE_MATCH_1}")
+    else()
+      set(gcov_name gcov)
+    endif()
+    find_program(GCOV_EXECUTABLE NAMES "${gcov_name}" HINTS "${compiler_dir}" REQUIRED)
+    set(profile "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/MPMCQueueTest.dir/src/MPMCQueueTest.cpp")
+    add_test(NAME MPMCQueueCoverageReset COMMAND "${CMAKE_COMMAND}" -E rm -f "${profile}.gcda")
+    add_test(NAME MPMCQueueMCDC
+      COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/src/check_mcdc.py"
+        --gcno "${profile}.gcno"
+        --gcov "${GCOV_EXECUTABLE}"
+    )
+    set_tests_properties(MPMCQueueCoverageReset PROPERTIES FIXTURES_SETUP queue_coverage_reset)
+    set_tests_properties(MPMCQueueTest PROPERTIES
+      FIXTURES_REQUIRED queue_coverage_reset
+      FIXTURES_SETUP queue_coverage
+    )
+    set_tests_properties(MPMCQueueMCDC PROPERTIES FIXTURES_REQUIRED queue_coverage DEPENDS MPMCQueueTest)
+  endif()
 endif()
 
 # -----------------------------------------------------------------------------
