@@ -20,7 +20,7 @@ It's battle hardened and used daily in production:
 It's been cited by the following papers:
 - Peizhao Ou and Brian Demsky. 2018. Towards understanding the costs of avoiding
   out-of-thin-air results. Proc. ACM Program. Lang. 2, OOPSLA, Article 136
-  (October 2018), 29 pages. DOI: https://doi.org/10.1145/3276506 
+  (October 2018), 29 pages. DOI: https://doi.org/10.1145/3276506
 
 ## Example
 
@@ -59,7 +59,7 @@ t2.join();
 - `void emplace(Args &&... args);`
 
   Enqueue an item using inplace construction. Blocks if queue is full.
-  
+
 - `bool try_emplace(Args &&... args);`
 
   Try to enqueue an item using inplace construction. Returns `true` on
@@ -89,7 +89,7 @@ t2.join();
 
   Dequeue an item by copying or moving the item into `v`. Blocks if
   queue is empty.
-  
+
 - `bool try_pop(T &v);`
 
   Try to dequeue an item by copying or moving the item into

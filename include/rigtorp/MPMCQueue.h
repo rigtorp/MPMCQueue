@@ -220,7 +220,7 @@ public:
   [[nodiscard]] std::ptrdiff_t size() const noexcept {
     // TODO: How can we deal with wrapped queue on 32bit?
     return static_cast<std::ptrdiff_t>(head_.load(std::memory_order_relaxed) -
-                                  tail_.load(std::memory_order_relaxed));
+                                       tail_.load(std::memory_order_relaxed));
   }
 
   /// Returns true if the queue is empty.
@@ -237,9 +237,13 @@ private:
     }
   }
 
-  constexpr std::size_t idx(std::size_t i) const noexcept { return i % capacity_; }
+  constexpr std::size_t idx(std::size_t i) const noexcept {
+    return i % capacity_;
+  }
 
-  constexpr std::size_t turn(std::size_t i) const noexcept { return i / capacity_; }
+  constexpr std::size_t turn(std::size_t i) const noexcept {
+    return i / capacity_;
+  }
 
 private:
   void deallocate_slots() noexcept {
