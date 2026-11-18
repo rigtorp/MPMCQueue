@@ -1,9 +1,9 @@
 # MPMCQueue.h
 
-![C/C++ CI](https://github.com/rigtorp/MPMCQueue/workflows/C/C++%20CI/badge.svg)
+![C/C++ CI](https://github.com/rigtorp/MPMCQueue/actions/workflows/ci.yml/badge.svg)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](https://raw.githubusercontent.com/rigtorp/MPMCQueue/master/LICENSE)
 
-A bounded multi-producer multi-consumer concurrent queue written in C++11.
+A bounded multi-producer multi-consumer concurrent queue for C++20. Build with CMake 3.24 or newer.
 
 It's battle hardened and used daily in production:
 - In the [Frostbite game engine](https://www.ea.com/frostbite) developed by

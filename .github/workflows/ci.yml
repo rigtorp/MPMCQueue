@@ -1,0 +1,16 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+
+jobs:
+  ci:
+    uses: rigtorp/.github/.github/workflows/cpp-ci.yml@master
+    with:
+      cxx-standards: '["20"]'
+      run-sanitizers: true
+      enable-windows: true
+      enable-macos: true
+      warnings-as-errors: true
