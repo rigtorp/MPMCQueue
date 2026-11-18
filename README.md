@@ -97,8 +97,9 @@ t2.join();
 
 - `template <typename Consumer> bool try_consume(Consumer &&consumer);`
 
-  Tries to dequeue an item and pass it to a non-throwing callable as an rvalue.
-  Returns `true` on success and `false` if the queue is empty.
+  Tries to dequeue an item and invoke the consumer on it as an rvalue.
+  Uses `std::invoke` so the consumer can also be a pointer to a member. The
+  invocation must be non-throwing. Returns `true` on success and `false` if the queue is empty.
 
 - `ssize_t size();`
 
