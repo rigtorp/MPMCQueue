@@ -3,14 +3,17 @@
 
 #undef NDEBUG
 
+#include <atomic>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <exception>
 #include <memory>
 #include <new>
 #include <rigtorp/MPMCQueue.h>
 #include <set>
 #include <thread>
+#include <utility>
 #include <vector>
 
 // TestType tracks correct usage of constructors and destructors
