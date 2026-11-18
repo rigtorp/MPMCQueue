@@ -181,10 +181,11 @@ public:
                   "T must be nothrow constructible with Args&&...");
     auto const head = head_.fetch_add(1);
     auto &slot = slots_[idx(head)];
-    while (turn(head) * 2 != slot.turn.load(std::memory_order_acquire))
+    auto const t = turn(head);
+    while (t * 2 != slot.turn.load(std::memory_order_acquire))
       ;
     slot.construct(std::forward<Args>(args)...);
-    slot.turn.store(turn(head) * 2 + 1, std::memory_order_release);
+    slot.turn.store(t * 2 + 1, std::memory_order_release);
   }
 
   template <typename... Args> bool try_emplace(Args &&...args) noexcept {
@@ -193,10 +194,11 @@ public:
     auto head = head_.load(std::memory_order_acquire);
     for (;;) {
       auto &slot = slots_[idx(head)];
-      if (turn(head) * 2 == slot.turn.load(std::memory_order_acquire)) {
+      auto const t = turn(head);
+      if (t * 2 == slot.turn.load(std::memory_order_acquire)) {
         if (head_.compare_exchange_strong(head, head + 1)) {
           slot.construct(std::forward<Args>(args)...);
-          slot.turn.store(turn(head) * 2 + 1, std::memory_order_release);
+          slot.turn.store(t * 2 + 1, std::memory_order_release);
           return true;
         }
       } else {
@@ -238,22 +240,24 @@ public:
   void pop(T &v) noexcept {
     auto const tail = tail_.fetch_add(1);
     auto &slot = slots_[idx(tail)];
-    while (turn(tail) * 2 + 1 != slot.turn.load(std::memory_order_acquire))
+    auto const t = turn(tail);
+    while (t * 2 + 1 != slot.turn.load(std::memory_order_acquire))
       ;
     v = slot.move();
     slot.destroy();
-    slot.turn.store(turn(tail) * 2 + 2, std::memory_order_release);
+    slot.turn.store(t * 2 + 2, std::memory_order_release);
   }
 
   bool try_pop(T &v) noexcept {
     auto tail = tail_.load(std::memory_order_acquire);
     for (;;) {
       auto &slot = slots_[idx(tail)];
-      if (turn(tail) * 2 + 1 == slot.turn.load(std::memory_order_acquire)) {
+      auto const t = turn(tail);
+      if (t * 2 + 1 == slot.turn.load(std::memory_order_acquire)) {
         if (tail_.compare_exchange_strong(tail, tail + 1)) {
           v = slot.move();
           slot.destroy();
-          slot.turn.store(turn(tail) * 2 + 2, std::memory_order_release);
+          slot.turn.store(t * 2 + 2, std::memory_order_release);
           return true;
         }
       } else {
