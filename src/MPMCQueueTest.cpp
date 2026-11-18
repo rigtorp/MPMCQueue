@@ -25,6 +25,8 @@ SOFTWARE.
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <new>
 #include <rigtorp/MPMCQueue.h>
 #include <set>
 #include <thread>
@@ -66,6 +68,44 @@ struct TestType {
 };
 
 std::set<const TestType *> TestType::constructed;
+
+struct AllocationState {
+  std::size_t count = 0;
+  bool misalign = false;
+};
+
+template <typename T> struct TestAllocator {
+  using value_type = T;
+
+  explicit TestAllocator(AllocationState &allocationState) noexcept
+      : state(allocationState) {}
+
+  template <typename U>
+  TestAllocator(const TestAllocator<U> &other) noexcept : state(other.state) {}
+
+  T *allocate(std::size_t count) {
+    assert(state.count == 0);
+    auto *allocation = std::allocator<T>{}.allocate(count);
+    state.count = count;
+    if (state.misalign) {
+      auto *bytes = reinterpret_cast<std::byte *>(allocation);
+      return static_cast<T *>(static_cast<void *>(bytes + 1));
+    }
+    return allocation;
+  }
+
+  void deallocate(T *allocation, std::size_t count) noexcept {
+    assert(state.count == count);
+    if (state.misalign) {
+      auto *bytes = reinterpret_cast<std::byte *>(allocation);
+      allocation = static_cast<T *>(static_cast<void *>(bytes - 1));
+    }
+    std::allocator<T>{}.deallocate(allocation, count);
+    state.count = 0;
+  }
+
+  AllocationState &state;
+};
 
 int main(int argc, char *argv[]) {
   (void)argc;
@@ -207,6 +247,27 @@ int main(int argc, char *argv[]) {
       throws = true;
     }
     assert(throws == true);
+  }
+
+  {
+    AllocationState state;
+    {
+      MPMCQueue<int, TestAllocator<int>> q(1, TestAllocator<int>(state));
+      assert(state.count == 2);
+      assert(q.try_push(42));
+      int value = 0;
+      assert(q.try_pop(value) && value == 42);
+    }
+    assert(state.count == 0);
+
+    state.misalign = true;
+    bool throws = false;
+    try {
+      MPMCQueue<int, TestAllocator<int>> q(1, TestAllocator<int>(state));
+    } catch (const std::bad_alloc &) {
+      throws = true;
+    }
+    assert(throws && state.count == 0);
   }
 
   // Fuzz test
