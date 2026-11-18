@@ -68,7 +68,8 @@ struct TestType {
 std::set<const TestType *> TestType::constructed;
 
 int main(int argc, char *argv[]) {
-  (void)argc, (void)argv;
+  (void)argc;
+  (void)argv;
 
   using namespace rigtorp;
 
@@ -108,44 +109,38 @@ int main(int argc, char *argv[]) {
 
   // Copyable only type
   {
-    struct Test {
-      Test() {}
+    struct alignas(512) Test {
+      Test() = default;
       Test(const Test &) noexcept {}
       Test &operator=(const Test &) noexcept { return *this; }
       Test(Test &&) = delete;
+      Test &operator=(Test &&) = delete;
     };
     MPMCQueue<Test> q(16);
     // lvalue
     Test v;
     q.emplace(v);
-    q.try_emplace(v);
+    assert(q.try_emplace(v));
     q.push(v);
-    q.try_push(v);
+    assert(q.try_push(v));
     // xvalue
     q.push(Test());
-    q.try_push(Test());
+    assert(q.try_push(Test()));
+    q.pop(v);
+    assert(q.try_pop(v));
   }
 
   // Movable only type
   {
     MPMCQueue<std::unique_ptr<int>> q(16);
-    // lvalue
-    // auto v = std::unique_ptr<int>(new int(1));
-    // q.emplace(v);
-    // q.try_emplace(v);
-    // q.push(v);
-    // q.try_push(v);
-    // xvalue
-    q.emplace(std::unique_ptr<int>(new int(1)));
-    q.try_emplace(std::unique_ptr<int>(new int(2)));
-    q.push(std::unique_ptr<int>(new int(3)));
-    q.try_push(std::unique_ptr<int>(new int(4)));
-
+    q.emplace(std::make_unique<int>(1));
+    assert(q.try_emplace(std::make_unique<int>(2)));
+    q.push(std::make_unique<int>(3));
+    assert(q.try_push(std::make_unique<int>(4)));
     std::unique_ptr<int> v;
     q.pop(v);
-    assert(*v == 1);
-    assert(q.try_pop(v) == true);
-    assert(*v == 2);
+    assert(v && *v == 1);
+    assert(q.try_pop(v) && *v == 2);
     assert(q.try_consume([&v](std::unique_ptr<int> &&w) noexcept {
              v = std::move(w);
            }) == true);
@@ -156,7 +151,7 @@ int main(int argc, char *argv[]) {
   {
     MPMCQueue<std::unique_ptr<int>> q(1);
     {
-      auto up = std::unique_ptr<int>(new int(1));
+      auto up = std::make_unique<int>(1);
       auto *rp = up.get();
       std::unique_ptr<int> up2;
       assert(q.try_emplace(std::move(up)) == true);
@@ -168,7 +163,7 @@ int main(int argc, char *argv[]) {
     }
 
     {
-      auto up = std::unique_ptr<int>(new int(1));
+      auto up = std::make_unique<int>(1);
       auto *rp = up.get();
       std::unique_ptr<int> up2;
       q.emplace(std::move(up));
@@ -180,7 +175,7 @@ int main(int argc, char *argv[]) {
     }
 
     {
-      auto up = std::unique_ptr<int>(new int(1));
+      auto up = std::make_unique<int>(1);
       auto *rp = up.get();
       std::unique_ptr<int> up2;
       q.push(std::move(up));
@@ -192,7 +187,7 @@ int main(int argc, char *argv[]) {
     }
 
     {
-      auto up = std::unique_ptr<int>(new int(1));
+      auto up = std::make_unique<int>(1);
       auto *rp = up.get();
       std::unique_ptr<int> up2;
       assert(q.try_push(std::move(up)) == true);
