@@ -187,6 +187,23 @@ int main(int argc, char *argv[]) {
     assert(*v == 3);
   }
 
+  {
+    struct Item {
+      bool *consumed;
+      void consume() && noexcept { *consumed = true; }
+    };
+    bool consumed = false;
+    MPMCQueue<Item> q(1);
+    assert(!q.try_consume(&Item::consume));
+    q.emplace(&consumed);
+    assert(q.try_consume(&Item::consume));
+    assert(consumed && q.empty());
+
+    q.emplace(&consumed);
+    assert(q.try_consume(&Item::consumed));
+    assert(q.empty());
+  }
+
   // Check that pointer have same address and value after moving through queue
   {
     MPMCQueue<std::unique_ptr<int>> q(1);

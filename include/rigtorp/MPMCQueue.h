@@ -25,6 +25,7 @@ SOFTWARE.
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <limits>
 #include <memory>
 #include <new>
@@ -208,9 +209,7 @@ public:
   }
 
   template <typename Consumer>
-    requires requires(Consumer &&c, T &&item) {
-      { std::forward<Consumer>(c)(std::move(item)) } noexcept;
-    }
+    requires std::is_nothrow_invocable_v<Consumer &&, T &&>
   [[nodiscard]] bool try_consume(Consumer &&c) noexcept {
     auto tail = tail_.load(std::memory_order_acquire);
     for (;;) {
@@ -218,7 +217,7 @@ public:
       auto const t = turn(tail);
       if (t * 2 + 1 == slot.turn.load(std::memory_order_acquire)) {
         if (tail_.compare_exchange_strong(tail, tail + 1)) {
-          std::forward<Consumer>(c)(slot.move());
+          std::invoke(std::forward<Consumer>(c), slot.move());
           slot.destroy();
           slot.turn.store(t * 2 + 2, std::memory_order_release);
           return true;
