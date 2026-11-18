@@ -1,13 +1,12 @@
 // SPDX-FileCopyrightText: 2018 Erik Rigtorp <erik@rigtorp.se>
 // SPDX-License-Identifier: MIT
 
-#undef NDEBUG
-
 #include <atomic>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <exception>
+#include <iostream>
 #include <limits>
 #include <memory>
 #include <new>
@@ -17,35 +16,44 @@
 #include <utility>
 #include <vector>
 
+#define CHECK(expr)                                                            \
+  do {                                                                         \
+    if (!(expr)) {                                                             \
+      std::cerr << __FILE__ << ":" << __LINE__ << ": CHECK failed: " #expr     \
+                << std::endl;                                                  \
+      std::abort();                                                            \
+    }                                                                          \
+  } while (false)
+
 // TestType tracks correct usage of constructors and destructors
 struct TestType {
   static std::set<const TestType *> constructed;
   TestType() noexcept {
-    assert(constructed.count(this) == 0);
+    CHECK(constructed.count(this) == 0);
     constructed.insert(this);
   };
   TestType(const TestType &other) noexcept {
-    assert(constructed.count(this) == 0);
-    assert(constructed.count(&other) == 1);
+    CHECK(constructed.count(this) == 0);
+    CHECK(constructed.count(&other) == 1);
     constructed.insert(this);
   };
   TestType(TestType &&other) noexcept {
-    assert(constructed.count(this) == 0);
-    assert(constructed.count(&other) == 1);
+    CHECK(constructed.count(this) == 0);
+    CHECK(constructed.count(&other) == 1);
     constructed.insert(this);
   };
   TestType &operator=(const TestType &other) noexcept {
-    assert(constructed.count(this) == 1);
-    assert(constructed.count(&other) == 1);
+    CHECK(constructed.count(this) == 1);
+    CHECK(constructed.count(&other) == 1);
     return *this;
   };
   TestType &operator=(TestType &&other) noexcept {
-    assert(constructed.count(this) == 1);
-    assert(constructed.count(&other) == 1);
+    CHECK(constructed.count(this) == 1);
+    CHECK(constructed.count(&other) == 1);
     return *this;
   }
   ~TestType() noexcept {
-    assert(constructed.count(this) == 1);
+    CHECK(constructed.count(this) == 1);
     constructed.erase(this);
   };
   // To verify that alignment and padding calculations are handled correctly
@@ -69,7 +77,7 @@ template <typename T> struct TestAllocator {
   TestAllocator(const TestAllocator<U> &other) noexcept : state(other.state) {}
 
   T *allocate(std::size_t count) {
-    assert(state.count == 0);
+    CHECK(state.count == 0);
     auto *allocation = std::allocator<T>{}.allocate(count);
     state.count = count;
     if (state.misalign) {
@@ -80,7 +88,7 @@ template <typename T> struct TestAllocator {
   }
 
   void deallocate(T *allocation, std::size_t count) noexcept {
-    assert(state.count == count);
+    CHECK(state.count == count);
     if (state.misalign) {
       auto *bytes = reinterpret_cast<std::byte *>(allocation);
       allocation = static_cast<T *>(static_cast<void *>(bytes - 1));
@@ -100,36 +108,36 @@ int main(int argc, char *argv[]) {
 
   {
     MPMCQueue<TestType> q(11);
-    assert(q.size() == 0 && q.empty());
+    CHECK(q.size() == 0 && q.empty());
     for (int i = 0; i < 10; i++) {
       q.emplace();
     }
-    assert(q.size() == 10 && !q.empty());
-    assert(TestType::constructed.size() == 10);
+    CHECK(q.size() == 10 && !q.empty());
+    CHECK(TestType::constructed.size() == 10);
 
     TestType t;
     q.pop(t);
-    assert(q.size() == 9 && !q.empty());
-    assert(TestType::constructed.size() == 10);
+    CHECK(q.size() == 9 && !q.empty());
+    CHECK(TestType::constructed.size() == 10);
 
     q.pop(t);
     q.emplace();
-    assert(q.size() == 9 && !q.empty());
-    assert(TestType::constructed.size() == 10);
+    CHECK(q.size() == 9 && !q.empty());
+    CHECK(TestType::constructed.size() == 10);
   }
-  assert(TestType::constructed.size() == 0);
+  CHECK(TestType::constructed.size() == 0);
 
   {
     MPMCQueue<int> q(1);
     int t = 0;
-    assert(q.try_push(1) == true);
-    assert(q.size() == 1 && !q.empty());
-    assert(q.try_push(2) == false);
-    assert(q.size() == 1 && !q.empty());
-    assert(q.try_pop(t) == true && t == 1);
-    assert(q.size() == 0 && q.empty());
-    assert(q.try_pop(t) == false && t == 1);
-    assert(q.size() == 0 && q.empty());
+    CHECK(q.try_push(1) == true);
+    CHECK(q.size() == 1 && !q.empty());
+    CHECK(q.try_push(2) == false);
+    CHECK(q.size() == 1 && !q.empty());
+    CHECK(q.try_pop(t) == true && t == 1);
+    CHECK(q.size() == 0 && q.empty());
+    CHECK(q.try_pop(t) == false && t == 1);
+    CHECK(q.size() == 0 && q.empty());
   }
 
   // Copyable only type
@@ -145,31 +153,31 @@ int main(int argc, char *argv[]) {
     // lvalue
     Test v;
     q.emplace(v);
-    assert(q.try_emplace(v));
+    CHECK(q.try_emplace(v));
     q.push(v);
-    assert(q.try_push(v));
+    CHECK(q.try_push(v));
     // xvalue
     q.push(Test());
-    assert(q.try_push(Test()));
+    CHECK(q.try_push(Test()));
     q.pop(v);
-    assert(q.try_pop(v));
+    CHECK(q.try_pop(v));
   }
 
   // Movable only type
   {
     MPMCQueue<std::unique_ptr<int>> q(16);
     q.emplace(std::make_unique<int>(1));
-    assert(q.try_emplace(std::make_unique<int>(2)));
+    CHECK(q.try_emplace(std::make_unique<int>(2)));
     q.push(std::make_unique<int>(3));
-    assert(q.try_push(std::make_unique<int>(4)));
+    CHECK(q.try_push(std::make_unique<int>(4)));
     std::unique_ptr<int> v;
     q.pop(v);
-    assert(v && *v == 1);
-    assert(q.try_pop(v) && *v == 2);
-    assert(q.try_consume([&v](std::unique_ptr<int> &&w) noexcept {
+    CHECK(v && *v == 1);
+    CHECK(q.try_pop(v) && *v == 2);
+    CHECK(q.try_consume([&v](std::unique_ptr<int> &&w) noexcept {
       v = std::move(w);
     }) == true);
-    assert(*v == 3);
+    CHECK(*v == 3);
   }
 
   {
@@ -179,14 +187,14 @@ int main(int argc, char *argv[]) {
     };
     bool consumed = false;
     MPMCQueue<Item> q(1);
-    assert(!q.try_consume(&Item::consume));
+    CHECK(!q.try_consume(&Item::consume));
     q.emplace(&consumed);
-    assert(q.try_consume(&Item::consume));
-    assert(consumed && q.empty());
+    CHECK(q.try_consume(&Item::consume));
+    CHECK(consumed && q.empty());
 
     q.emplace(&consumed);
-    assert(q.try_consume(&Item::consumed));
-    assert(q.empty());
+    CHECK(q.try_consume(&Item::consumed));
+    CHECK(q.empty());
   }
 
   // Check that pointer have same address and value after moving through queue
@@ -196,12 +204,12 @@ int main(int argc, char *argv[]) {
       auto up = std::make_unique<int>(1);
       auto *rp = up.get();
       std::unique_ptr<int> up2;
-      assert(q.try_emplace(std::move(up)) == true);
-      assert(q.try_consume([&](std::unique_ptr<int> v) noexcept {
+      CHECK(q.try_emplace(std::move(up)) == true);
+      CHECK(q.try_consume([&](std::unique_ptr<int> v) noexcept {
         up2 = std::move(v);
       }) == true);
-      assert(rp == up2.get());
-      assert(*up2 == 1);
+      CHECK(rp == up2.get());
+      CHECK(*up2 == 1);
     }
 
     {
@@ -209,11 +217,11 @@ int main(int argc, char *argv[]) {
       auto *rp = up.get();
       std::unique_ptr<int> up2;
       q.emplace(std::move(up));
-      assert(q.try_consume([&](std::unique_ptr<int> v) noexcept {
+      CHECK(q.try_consume([&](std::unique_ptr<int> v) noexcept {
         up2 = std::move(v);
       }) == true);
-      assert(rp == up2.get());
-      assert(*up2 == 1);
+      CHECK(rp == up2.get());
+      CHECK(*up2 == 1);
     }
 
     {
@@ -221,23 +229,23 @@ int main(int argc, char *argv[]) {
       auto *rp = up.get();
       std::unique_ptr<int> up2;
       q.push(std::move(up));
-      assert(q.try_consume([&](std::unique_ptr<int> v) noexcept {
+      CHECK(q.try_consume([&](std::unique_ptr<int> v) noexcept {
         up2 = std::move(v);
       }) == true);
-      assert(rp == up2.get());
-      assert(*up2 == 1);
+      CHECK(rp == up2.get());
+      CHECK(*up2 == 1);
     }
 
     {
       auto up = std::make_unique<int>(1);
       auto *rp = up.get();
       std::unique_ptr<int> up2;
-      assert(q.try_push(std::move(up)) == true);
-      assert(q.try_consume([&](std::unique_ptr<int> v) noexcept {
+      CHECK(q.try_push(std::move(up)) == true);
+      CHECK(q.try_consume([&](std::unique_ptr<int> v) noexcept {
         up2 = std::move(v);
       }) == true);
-      assert(rp == up2.get());
-      assert(*up2 == 1);
+      CHECK(rp == up2.get());
+      CHECK(*up2 == 1);
     }
   }
 
@@ -248,19 +256,19 @@ int main(int argc, char *argv[]) {
     } catch (std::exception &) {
       throws = true;
     }
-    assert(throws == true);
+    CHECK(throws == true);
   }
 
   {
     AllocationState state;
     {
       MPMCQueue<int, TestAllocator<int>> q(1, TestAllocator<int>(state));
-      assert(state.count == 2);
-      assert(q.try_push(42));
+      CHECK(state.count == 2);
+      CHECK(q.try_push(42));
       int value = 0;
-      assert(q.try_pop(value) && value == 42);
+      CHECK(q.try_pop(value) && value == 42);
     }
-    assert(state.count == 0);
+    CHECK(state.count == 0);
 
     state.misalign = true;
     bool throws = false;
@@ -269,7 +277,7 @@ int main(int argc, char *argv[]) {
     } catch (const std::bad_alloc &) {
       throws = true;
     }
-    assert(throws && state.count == 0);
+    CHECK(throws && state.count == 0);
   }
 
   {
@@ -279,7 +287,7 @@ int main(int argc, char *argv[]) {
     } catch (const std::bad_array_new_length &) {
       throws = true;
     }
-    assert(throws);
+    CHECK(throws);
   }
 
   // Exercise both ticket paths under contention, including try-operation
@@ -327,7 +335,7 @@ int main(int argc, char *argv[]) {
     for (auto &thread : threads) {
       thread.join();
     }
-    assert(sum == numOps * (numOps - 1) / 2);
+    CHECK(sum == numOps * (numOps - 1) / 2);
   }
 
   return 0;
