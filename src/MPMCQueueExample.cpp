@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2016 Erik Rigtorp <erik@rigtorp.se>
+// SPDX-License-Identifier: MIT
+
 #include <iostream>
 #include <rigtorp/MPMCQueue.h>
 #include <thread>
