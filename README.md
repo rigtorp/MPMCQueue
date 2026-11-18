@@ -155,6 +155,16 @@ implementation:
 - A multithreaded fuzz test that all elements are enqueued and
   dequeued correctly under heavy contention.
 
+To check MC/DC coverage of the queue header, use GCC 14 or newer with its
+matching gcov and a single-config CMake generator:
+
+    CXX=g++-14 cmake --preset coverage
+    cmake --build --preset coverage
+    ctest --preset coverage
+
+CTest clears the previous profile before each run. The check combines condition
+outcomes across template instantiations and fails on uncovered code or outcomes.
+
 ## TODO
 
 - [X] Add allocator supports so that the queue could be used with huge pages and

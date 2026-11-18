@@ -46,6 +46,15 @@
       "cacheVariables": {
         "CMAKE_CXX_FLAGS": "-fsanitize=thread -fno-omit-frame-pointer"
       }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Debug (GCC MC/DC)",
+      "inherits": "debug",
+      "cacheVariables": {
+        "CMAKE_CXX_STANDARD": "20",
+        "MPMCQueue_COVERAGE": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -72,6 +81,11 @@
       "name": "tsan",
       "inherits": "base",
       "configurePreset": "tsan"
+    },
+    {
+      "name": "coverage",
+      "inherits": "base",
+      "configurePreset": "coverage"
     }
   ],
   "testPresets": [
@@ -101,6 +115,11 @@
       "name": "tsan",
       "inherits": "base",
       "configurePreset": "tsan"
+    },
+    {
+      "name": "coverage",
+      "inherits": "base",
+      "configurePreset": "coverage"
     }
   ]
 }

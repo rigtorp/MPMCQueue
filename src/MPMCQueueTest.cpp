@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <new>
 #include <rigtorp/MPMCQueue.h>
@@ -271,9 +272,20 @@ int main(int argc, char *argv[]) {
     assert(throws && state.count == 0);
   }
 
-  // Fuzz test
   {
-    const std::size_t numOps = 1000;
+    bool throws = false;
+    try {
+      MPMCQueue<int> q(std::numeric_limits<std::size_t>::max());
+    } catch (const std::bad_array_new_length &) {
+      throws = true;
+    }
+    assert(throws);
+  }
+
+  // Exercise both ticket paths under contention, including try-operation
+  // retries when another producer or consumer claims a ticket first.
+  for (bool tryOperations : {false, true}) {
+    const std::size_t numOps = 10000;
     const std::size_t numThreads = 10;
     MPMCQueue<std::uint64_t> q(numThreads);
     std::atomic<bool> flag(false);
@@ -284,7 +296,12 @@ int main(int argc, char *argv[]) {
         while (!flag)
           ;
         for (auto j = i; j < numOps; j += numThreads) {
-          q.push(static_cast<std::uint64_t>(j));
+          if (tryOperations) {
+            while (!q.try_push(static_cast<std::uint64_t>(j)))
+              ;
+          } else {
+            q.push(static_cast<std::uint64_t>(j));
+          }
         }
       }));
     }
@@ -295,7 +312,12 @@ int main(int argc, char *argv[]) {
         std::uint64_t threadSum = 0;
         for (auto j = i; j < numOps; j += numThreads) {
           std::uint64_t v;
-          q.pop(v);
+          if (tryOperations) {
+            while (!q.try_pop(v))
+              ;
+          } else {
+            q.pop(v);
+          }
           threadSum += v;
         }
         sum += threadSum;
