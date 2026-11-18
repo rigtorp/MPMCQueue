@@ -30,6 +30,7 @@ SOFTWARE.
 #include <memory>
 #include <new> // std::hardware_destructive_interference_size
 #include <stdexcept>
+#include <type_traits>
 
 #ifndef __cpp_aligned_new
 #ifdef _WIN32
@@ -270,6 +271,34 @@ public:
     }
   }
 
+  template <typename Consumer> bool try_consume(Consumer &&c) noexcept {
+#ifdef __cpp_lib_is_invocable
+    static_assert(std::is_nothrow_invocable_v<Consumer, T &&>,
+                  "Consumer must be noexcept invocable with T&&");
+#endif
+    auto tail = tail_.load(std::memory_order_acquire);
+    for (;;) {
+      auto &slot = slots_[idx(tail)];
+      auto const t = turn(tail);
+      if (t * 2 + 1 == slot.turn.load(std::memory_order_acquire)) {
+        if (tail_.compare_exchange_strong(tail, tail + 1)) {
+          static_assert(noexcept(c(slot.move())),
+                        "Consumer must be noexcept invocable with T&&");
+          c(slot.move());
+          slot.destroy();
+          slot.turn.store(t * 2 + 2, std::memory_order_release);
+          return true;
+        }
+      } else {
+        auto const prevTail = tail;
+        tail = tail_.load(std::memory_order_acquire);
+        if (tail == prevTail) {
+          return false;
+        }
+      }
+    }
+  }
+
   /// Returns the number of elements in the queue.
   /// The size can be negative when the queue is empty and there is at least one
   /// reader waiting. Since this is a concurrent queue the size is only a best
@@ -284,7 +313,6 @@ public:
   /// Since this is a concurrent queue this is only a best effort guess
   /// until all reader and writer threads have been joined.
   bool empty() const noexcept { return size() <= 0; }
-
 private:
   constexpr size_t idx(size_t i) const noexcept { return i % capacity_; }
 
