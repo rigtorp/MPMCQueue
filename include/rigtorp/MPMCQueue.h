@@ -33,51 +33,55 @@ SOFTWARE.
 #include <utility>
 
 namespace rigtorp {
-namespace mpmc {
 
+template <typename T, typename Allocator = std::allocator<T>>
+  requires std::is_nothrow_destructible_v<T>
+class MPMCQueue {
 #if defined(__s390x__)
-inline constexpr std::size_t kFalseSharingRange = 256;
+  static constexpr std::size_t kFalseSharingRange = 256;
 #elif defined(__APPLE__) && defined(__aarch64__)
-inline constexpr std::size_t kFalseSharingRange = 128;
+  static constexpr std::size_t kFalseSharingRange = 128;
 #else
-inline constexpr std::size_t kFalseSharingRange = 64;
+  static constexpr std::size_t kFalseSharingRange = 64;
 #endif
 
-template <typename T> using AlignedAllocator = std::allocator<T>;
+  struct Slot {
+    Slot() noexcept : turn(0) {}
 
-template <typename T> struct Slot {
-  Slot() noexcept : turn(0) {}
-
-  ~Slot() noexcept {
-    if (turn & 1) {
-      destroy();
+    ~Slot() noexcept {
+      if (turn & 1) {
+        destroy();
+      }
     }
-  }
 
-  template <typename... Args> void construct(Args &&...args) noexcept {
-    std::construct_at(reinterpret_cast<T *>(storage),
-                      std::forward<Args>(args)...);
-  }
+    template <typename... Args> void construct(Args &&...args) noexcept {
+      std::construct_at(reinterpret_cast<T *>(storage),
+                        std::forward<Args>(args)...);
+    }
 
-  void destroy() noexcept { std::destroy_at(value()); }
+    void destroy() noexcept { std::destroy_at(value()); }
 
-  T &&move() noexcept { return std::move(*value()); }
+    T &&move() noexcept { return std::move(*value()); }
 
-  // Align to avoid false sharing between adjacent slots.
-  alignas(kFalseSharingRange) std::atomic<std::size_t> turn;
+    // Align to avoid false sharing between adjacent slots.
+    alignas(kFalseSharingRange) std::atomic<std::size_t> turn;
 
-private:
-  T *value() noexcept { return std::launder(reinterpret_cast<T *>(storage)); }
+  private:
+    T *value() noexcept { return std::launder(reinterpret_cast<T *>(storage)); }
 
-  alignas(T) std::byte storage[sizeof(T)];
-};
+    alignas(T) std::byte storage[sizeof(T)];
+  };
 
-template <typename T, typename Allocator = AlignedAllocator<Slot<T>>>
-  requires std::is_nothrow_destructible_v<T>
-class Queue {
+  using SlotAllocator =
+      typename std::allocator_traits<Allocator>::template rebind_alloc<Slot>;
+  using SlotAllocatorTraits = std::allocator_traits<SlotAllocator>;
+
+  static_assert(std::is_same_v<typename SlotAllocatorTraits::pointer, Slot *>,
+                "The rebound allocator must use raw pointers");
+
 public:
-  explicit Queue(const std::size_t capacity,
-                 const Allocator &allocator = Allocator())
+  explicit MPMCQueue(const std::size_t capacity,
+                     const Allocator &allocator = Allocator())
       : capacity_(capacity), allocator_(allocator), head_(0), tail_(0) {
     if (capacity_ == 0) [[unlikely]] {
       throw std::invalid_argument("capacity < 1");
@@ -86,38 +90,39 @@ public:
       throw std::bad_array_new_length();
     }
     // Allocate one extra slot to prevent false sharing on the last slot
-    slots_ = allocator_.allocate(capacity_ + 1);
+    slots_ = SlotAllocatorTraits::allocate(allocator_, capacity_ + 1);
     // Allocators are not required to honor alignment for over-aligned types
     // (see http://eel.is/c++draft/allocator.requirements#10) so we verify
     // alignment here
-    if (reinterpret_cast<std::uintptr_t>(slots_) % alignof(Slot<T>) != 0) [[unlikely]] {
-      allocator_.deallocate(slots_, capacity_ + 1);
+    if (reinterpret_cast<std::uintptr_t>(slots_) % alignof(Slot) != 0)
+        [[unlikely]] {
+      deallocate_slots();
       throw std::bad_alloc();
     }
     for (std::size_t i = 0; i < capacity_; ++i) {
       std::construct_at(&slots_[i]);
     }
     static_assert(
-        alignof(Slot<T>) >= kFalseSharingRange,
+        alignof(Slot) >= kFalseSharingRange,
         "Slot must be aligned to cache line boundary to prevent false sharing");
-    static_assert(sizeof(Slot<T>) % kFalseSharingRange == 0,
+    static_assert(sizeof(Slot) % kFalseSharingRange == 0,
                   "Slot size must be a multiple of cache line size to prevent "
                   "false sharing between adjacent slots");
-    static_assert(sizeof(Queue) % kFalseSharingRange == 0,
+    static_assert(sizeof(MPMCQueue) % kFalseSharingRange == 0,
                   "Queue size must be a multiple of cache line size to "
                   "prevent false sharing between adjacent queues");
   }
 
-  ~Queue() noexcept {
+  ~MPMCQueue() noexcept {
     for (std::size_t i = 0; i < capacity_; ++i) {
       std::destroy_at(&slots_[i]);
     }
-    allocator_.deallocate(slots_, capacity_ + 1);
+    deallocate_slots();
   }
 
   // non-copyable and non-movable
-  Queue(const Queue &) = delete;
-  Queue &operator=(const Queue &) = delete;
+  MPMCQueue(const MPMCQueue &) = delete;
+  MPMCQueue &operator=(const MPMCQueue &) = delete;
 
   template <typename... Args>
     requires std::is_nothrow_constructible_v<T, Args &&...>
@@ -254,18 +259,17 @@ private:
   constexpr std::size_t turn(std::size_t i) const noexcept { return i / capacity_; }
 
 private:
+  void deallocate_slots() noexcept {
+    SlotAllocatorTraits::deallocate(allocator_, slots_, capacity_ + 1);
+  }
+
   const std::size_t capacity_;
-  Slot<T> *slots_;
-  [[no_unique_address]] Allocator allocator_;
+  Slot *slots_;
+  [[no_unique_address]] SlotAllocator allocator_;
 
   // Align to avoid false sharing between head_ and tail_
   alignas(kFalseSharingRange) std::atomic<std::size_t> head_;
   alignas(kFalseSharingRange) std::atomic<std::size_t> tail_;
 };
-} // namespace mpmc
-
-template <typename T,
-          typename Allocator = mpmc::AlignedAllocator<mpmc::Slot<T>>>
-using MPMCQueue = mpmc::Queue<T, Allocator>;
 
 } // namespace rigtorp

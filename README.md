@@ -44,11 +44,18 @@ t2.join();
 
 ## Usage
 
-- `MPMCQueue<T>(size_t capacity);`
+- `MPMCQueue<T, Allocator>(std::size_t capacity, const Allocator &allocator = Allocator());`
 
-  Constructs a new `MPMCQueue` holding items of type `T` with capacity
-  `capacity`.
-  
+  Constructs a queue holding items of type `T` with the given capacity.
+  The default allocator is `std::allocator<T>`. Custom allocators must rebind
+  to the queue's private slot type, support its alignment, and use raw
+  pointers after rebinding. The queue uses the allocator for backing storage
+  and manages element construction and destruction directly.
+
+  Allocators that previously named `rigtorp::mpmc::Slot<T>` should now be
+  supplied as a rebindable allocator for `T`. Use `rigtorp::MPMCQueue`
+  as the queue type.
+
 - `void emplace(Args &&... args);`
 
   Enqueue an item using inplace construction. Blocks if queue is full.
