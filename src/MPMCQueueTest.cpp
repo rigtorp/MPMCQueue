@@ -163,8 +163,8 @@ int main(int argc, char *argv[]) {
     assert(v && *v == 1);
     assert(q.try_pop(v) && *v == 2);
     assert(q.try_consume([&v](std::unique_ptr<int> &&w) noexcept {
-             v = std::move(w);
-           }) == true);
+      v = std::move(w);
+    }) == true);
     assert(*v == 3);
   }
 
