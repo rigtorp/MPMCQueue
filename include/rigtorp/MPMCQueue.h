@@ -37,9 +37,12 @@ namespace rigtorp {
 template <typename T, typename Allocator = std::allocator<T>>
   requires std::is_nothrow_destructible_v<T>
 class MPMCQueue {
+  // Match SPSCQueue's spacing, including 128-byte pairs used by x86 spatial
+  // prefetchers.
 #if defined(__s390x__)
   static constexpr std::size_t kFalseSharingRange = 256;
-#elif defined(__APPLE__) && defined(__aarch64__)
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) ||        \
+    defined(_M_ARM64) || defined(__powerpc64__)
   static constexpr std::size_t kFalseSharingRange = 128;
 #else
   static constexpr std::size_t kFalseSharingRange = 64;
